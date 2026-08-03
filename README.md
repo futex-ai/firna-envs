@@ -66,6 +66,23 @@ E2B_API_KEY=... .venv/bin/python scripts/run_in_sandbox.py \
 The build helper derives the template name and resources from the manifest and
 refuses to rebuild a name already present in the selected E2B team.
 
+## Release and audit
+
+Pushing an `<env>-v<N>` tag publishes `firna-<env>-v<N>` to the separate
+production and preview E2B teams, then boots a sandbox in each team and runs
+the environment's `verify.sh`. Publishing is protected by the repository's
+`release` environment, whose deployment policy accepts only version tags.
+
+The release path is idempotent: if the immutable template name already exists,
+automation leaves it unchanged and still smoke-tests it. A normal local build
+continues to reject an existing name so accidental replacement is visible.
+
+To audit a deployed template, start with its template name, remove the `firna-`
+prefix to find the Git tag, and inspect that tag's manifest and Dockerfile. The
+matching run in the repository's
+[release workflow history](https://github.com/futex-ai/firna-envs/actions/workflows/release.yml)
+records publication and smoke-test results for both teams.
+
 ## Deployment integration
 
 Firna deployments consume these templates through the sandbox `profiles` map;

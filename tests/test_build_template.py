@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -94,6 +94,31 @@ class BuildTemplateTests(unittest.TestCase):
                 memory_mb=2048,
                 on_build_logs=logger.return_value,
             )
+
+    @patch("build_template.template_exists", return_value=True)
+    def test_release_can_leave_existing_template_unchanged(self, exists: Mock) -> None:
+        with (
+            patch.dict(os.environ, {"E2B_API_KEY": "test-key"}, clear=True),
+            patch("build_template.build_template") as build,
+            redirect_stdout(StringIO()),
+        ):
+            result = build_template.main(
+                [
+                    "--environment-dir",
+                    "envs/general",
+                    "--template",
+                    "firna-general-v2",
+                    "--cpu",
+                    "2",
+                    "--memory-mb",
+                    "2048",
+                    "--skip-existing",
+                ]
+            )
+
+        self.assertEqual(result, 0)
+        exists.assert_called_once_with("firna-general-v2")
+        build.assert_not_called()
 
 
 if __name__ == "__main__":

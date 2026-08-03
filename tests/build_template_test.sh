@@ -22,10 +22,10 @@ chmod +x "${test_root}/bin/python3"
 calls_path="${test_root}/calls"
 if E2B_API_KEY='' "${repo_root}/scripts/build_template.sh" general \
   >"${test_root}/missing-token.out" 2>"${test_root}/missing-token.err"; then
-  printf '%s\n' 'expected a missing access token to fail' >&2
+  printf '%s\n' 'expected a missing API key to fail' >&2
   exit 1
 elif [[ "$?" -ne 78 ]]; then
-  printf '%s\n' 'missing access token returned the wrong status' >&2
+  printf '%s\n' 'missing API key returned the wrong status' >&2
   exit 1
 fi
 
@@ -37,5 +37,15 @@ E2B_API_KEY=test-key \
 expected_call="${repo_root}/scripts/build_template.py --environment-dir ${repo_root}/envs/general --template firna-general-v2 --cpu 2 --memory-mb 2048"
 if [[ "$(<"$calls_path")" != "$expected_call" ]]; then
   printf 'unexpected create call: %s\n' "$(<"$calls_path")" >&2
+  exit 1
+fi
+
+E2B_API_KEY=test-key \
+  FIRNA_ENVS_PYTHON="${test_root}/bin/python3" \
+  MOCK_PYTHON_CALLS="$calls_path" \
+  "${repo_root}/scripts/build_template.sh" general --skip-existing
+
+if [[ "$(<"$calls_path")" != "${expected_call} --skip-existing" ]]; then
+  printf 'unexpected idempotent release call: %s\n' "$(<"$calls_path")" >&2
   exit 1
 fi

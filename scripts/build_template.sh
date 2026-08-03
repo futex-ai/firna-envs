@@ -2,10 +2,14 @@
 set -euo pipefail
 
 usage() {
-  printf 'usage: %s <environment-name>\n' "$0" >&2
+  printf 'usage: %s <environment-name> [--skip-existing]\n' "$0" >&2
 }
 
-if [[ "$#" -ne 1 ]]; then
+if [[ "$#" -lt 1 || "$#" -gt 2 ]]; then
+  usage
+  exit 64
+fi
+if [[ "$#" -eq 2 && "$2" != "--skip-existing" ]]; then
   usage
   exit 64
 fi
@@ -33,6 +37,15 @@ cpu="$(yq -r '.resources.cpu' "$manifest")"
 memory_mb="$(yq -r '.resources.memory_mb' "$manifest")"
 template="firna-${name}-v${version}"
 python_command="${FIRNA_ENVS_PYTHON:-python3}"
+python_args=(
+  --environment-dir "$env_dir"
+  --template "$template"
+  --cpu "$cpu"
+  --memory-mb "$memory_mb"
+)
+if [[ "${2:-}" == "--skip-existing" ]]; then
+  python_args+=(--skip-existing)
+fi
 
 if ! "$python_command" -c 'import e2b' >/dev/null 2>&1; then
   printf 'error: %s cannot import e2b; install requirements.txt\n' \
@@ -41,8 +54,4 @@ if ! "$python_command" -c 'import e2b' >/dev/null 2>&1; then
 fi
 
 printf 'building immutable template %s\n' "$template"
-"$python_command" "${repo_root}/scripts/build_template.py" \
-  --environment-dir "$env_dir" \
-  --template "$template" \
-  --cpu "$cpu" \
-  --memory-mb "$memory_mb"
+"$python_command" "${repo_root}/scripts/build_template.py" "${python_args[@]}"

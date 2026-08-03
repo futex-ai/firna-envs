@@ -26,12 +26,16 @@
 - [x] E2B auth available for both Firna teams through their distinct
   `E2B_API_KEY` values. The current E2B Python SDK builds templates with the
   team API key, so a deprecated CLI access token is not required.
-- [ ] **Confirm E2B account topology** (Milestone 3): does preview share the production E2B team? Check `gh secret list --repo futex-ai/juno` for distinct preview keys and the E2B dashboard team list. Plan assumes two accounts (`prod`, `preview`); collapse the matrix to one if it's a single team.
+- [x] **Confirm E2B account topology** (Milestone 3): production and preview
+  use distinct API keys and template namespaces. Publishing `general-v2` in
+  preview left it absent from production, confirming separate teams.
 - [x] **Confirm current E2B build and sandbox APIs before first use.** E2B CLI
   2.16.1 and Python SDK 2.36.0 were checked. The implementation uses the
   current Python Template and Sandbox SDK APIs because the CLI template-build
   interface no longer matches the original draft.
-- [ ] **bowser release exists?** `gh release view v0.2.0 --repo futex-ai/bowser --json assets` — if no release has ever been cut, tag `v0.2.0` in the bowser repo first (its `release.yml` builds the tarballs) or use the Milestone 4 source-build fallback.
+- [x] **bowser release exists?** `v0.2.0` was cut from the existing workspace
+  version after its full release verification passed; its four platform assets
+  were published successfully.
 
 ## Global Constraints
 
@@ -216,8 +220,8 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
 
 Tagging `<env>-v<N>` publishes that template to every E2B account and smoke-tests it; releases are gated by a protected GitHub environment.
 
-- [ ] Resolve the account-topology prerequisite (single vs separate preview E2B team). Configure repo secrets accordingly: `E2B_ACCESS_TOKEN_PROD`/`E2B_API_KEY_PROD` and, if separate, `E2B_ACCESS_TOKEN_PREVIEW`/`E2B_API_KEY_PREVIEW`. Create a `release` GitHub environment restricted to protected tags.
-- [ ] `.github/workflows/release.yml`:
+- [x] Resolve the account-topology prerequisite (single vs separate preview E2B team). Configure `E2B_API_KEY_PROD` and `E2B_API_KEY_PREVIEW`; current SDK template builds and sandbox boots both use the team API key. Create a `release` GitHub environment with a custom `*-v[0-9]*` tag-only deployment policy.
+- [x] `.github/workflows/release.yml`:
   ```yaml
   name: release
   on:
@@ -257,7 +261,7 @@ Tagging `<env>-v<N>` publishes that template to every E2B account and smoke-test
           run: python3 scripts/run_in_sandbox.py "firna-${TAG}" "envs/${TAG%-v*}/verify.sh"
   ```
   (Drop the matrix if there is a single account.)
-- [ ] Add the release/provenance section to `README.md`: tag → template name mapping, immutability rule, how a user audits a template (tag ↔ Dockerfile ↔ release run logs).
+- [x] Add the release/provenance section to `README.md`: tag → template name mapping, immutability rule, how a user audits a template (tag ↔ Dockerfile ↔ release run logs).
 - [ ] Dry-run via `workflow_dispatch` with `general-v2`; then tag for real: `git tag general-v2 && git push origin general-v2`. Verify both matrix legs pass.
 - [ ] Commit and push: `git commit -m "feat: add template release workflow"`.
 

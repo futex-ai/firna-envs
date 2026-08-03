@@ -1,0 +1,78 @@
+name: release
+
+on:
+  push:
+    tags:
+      - '*-v[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Environment tag, for example general-v2
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  YQ_VERSION: v4.53.3
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.account }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        account:
+          - prod
+          - preview
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install yq
+        run: |
+          sudo curl --fail --silent --show-error --location --retry 5 \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
+            --output /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Resolve and validate tag
+        env:
+          REQUESTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          if [[ ! "$REQUESTED_TAG" =~ ^[a-z0-9][a-z0-9-]*-v[1-9][0-9]*$ ]]; then
+            echo "invalid environment tag: $REQUESTED_TAG" >&2
+            exit 1
+          fi
+          env_name="${REQUESTED_TAG%-v*}"
+          version="${REQUESTED_TAG##*-v}"
+          manifest="envs/${env_name}/manifest.yaml"
+          if [[ ! -f "$manifest" ]]; then
+            echo "environment manifest not found: $manifest" >&2
+            exit 1
+          fi
+          manifest_name="$(yq -r '.name' "$manifest")"
+          manifest_version="$(yq -r '.version' "$manifest")"
+          if [[ "$env_name" != "$manifest_name" || "$version" != "$manifest_version" ]]; then
+            echo "tag $REQUESTED_TAG does not match $manifest" >&2
+            exit 1
+          fi
+          echo "ENV_NAME=$env_name" >> "$GITHUB_ENV"
+          echo "TEMPLATE=firna-${REQUESTED_TAG}" >> "$GITHUB_ENV"
+
+      - name: Install E2B SDK
+        run: python3 -m pip install --requirement requirements.txt
+
+      - name: Publish immutable template if missing
+        env:
+          E2B_API_KEY: ${{ matrix.account == 'prod' && secrets.E2B_API_KEY_PROD || secrets.E2B_API_KEY_PREVIEW }}
+        run: ./scripts/build_template.sh "$ENV_NAME" --skip-existing
+
+      - name: Smoke-test published template
+        env:
+          E2B_API_KEY: ${{ matrix.account == 'prod' && secrets.E2B_API_KEY_PROD || secrets.E2B_API_KEY_PREVIEW }}
+        run: python3 scripts/run_in_sandbox.py "$TEMPLATE" "envs/${ENV_NAME}/verify.sh"

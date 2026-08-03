@@ -20,6 +20,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--template", required=True)
     parser.add_argument("--cpu", type=int, required=True)
     parser.add_argument("--memory-mb", type=int, required=True)
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="leave an existing immutable template untouched",
+    )
     return parser.parse_args(argv)
 
 
@@ -66,6 +71,9 @@ def main(argv: list[str] | None = None) -> int:
         print("error: E2B_API_KEY must select the intended Firna team", file=sys.stderr)
         return 78
     if template_exists(args.template):
+        if args.skip_existing:
+            print(f"template {args.template} already exists; leaving it unchanged")
+            return 0
         print(
             f"error: template {args.template} already exists; "
             "increment the manifest version",
