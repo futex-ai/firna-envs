@@ -1,0 +1,12 @@
+name: browser
+version: 1
+description: Browser automation base environment with Google Chrome, Xvfb, and Bowser
+resources:
+  cpu: 2
+  memory_mb: 4096
+chrome:
+  version: 151.0.7922.71-1
+  sha256: c86cafc697ecdb88259312cef47e464d1278643610500a7c9104e6bb1af3ba5c
+bowser:
+  version: 0.2.0
+  sha256: 92458946103fe16e16e1a8eb07398b6d21903d66286776a90c151e5c9823c7d9

@@ -263,20 +263,23 @@ Tagging `<env>-v<N>` publishes that template to every E2B account and smoke-test
   (Drop the matrix if there is a single account.)
 - [x] Add the release/provenance section to `README.md`: tag → template name mapping, immutability rule, how a user audits a template (tag ↔ Dockerfile ↔ release run logs).
 - [ ] Dry-run via `workflow_dispatch` with `general-v2`; then tag for real: `git tag general-v2 && git push origin general-v2`. Verify both matrix legs pass.
-- [ ] Commit and push: `git commit -m "feat: add template release workflow"`.
+- [x] Commit and push: `git commit -m "feat: add template release workflow"`.
 
 ## Milestone 4: `browser` env with bowser
 
 `envs/browser/` ships Chrome + Xvfb + the bowser CLI; agents will drive it via `env_terminal`. Published as `firna-browser-v1`.
 
-- [ ] Resolve the bowser release prerequisite. Record the tarball URL and hash:
+- [x] Resolve the bowser release prerequisite. Record the tarball URL and hash:
   ```bash
   gh release view v0.2.0 --repo futex-ai/bowser --json assets --jq '.assets[].name'
   curl -fsSL <tarball-url> | shasum -a 256
   ```
   If cutting a release is not possible yet, use the fallback: a multi-stage build (`FROM rust:1.89-slim AS builder`, `git clone --depth 1 --branch v0.2.0 https://github.com/futex-ai/bowser`, `cargo build --release -p bowser-cli`, copy `target/release/bowser`) and pin the git tag instead of a tarball hash — still record `bowser.version` in the manifest.
-- [ ] `envs/browser/manifest.yaml` — `name: browser`, `version: 1`, description ("Browser automation base env: Google Chrome + Xvfb + bowser CLI"), `resources: {cpu: 2, memory_mb: 4096}` (Chrome needs headroom), and the `bowser:` pin block with the real version + sha256 from the previous step.
-- [ ] `envs/browser/Dockerfile` (adjust package names to the chosen base: `libasound2t64` on ubuntu 24.04, `libasound2` on 22.04):
+- [x] Pin the Google Chrome amd64 Debian package version and SHA-256 in the
+  browser manifest and Dockerfile. Validate both before installation so the
+  moving `current` URL cannot silently change a build.
+- [x] `envs/browser/manifest.yaml` — `name: browser`, `version: 1`, description ("Browser automation base env: Google Chrome + Xvfb + bowser CLI"), `resources: {cpu: 2, memory_mb: 4096}` (Chrome needs headroom), and the `bowser:` pin block with the real version + sha256 from the previous step.
+- [x] `envs/browser/Dockerfile` (adjust package names to the chosen base: `libasound2t64` on ubuntu 24.04, `libasound2` on 22.04):
   ```dockerfile
   FROM ubuntu:24.04
   ENV DEBIAN_FRONTEND=noninteractive
@@ -298,7 +301,7 @@ Tagging `<env>-v<N>` publishes that template to every E2B account and smoke-test
   ENV BOWSER_CHROME_PATH=/usr/bin/google-chrome-stable
   ```
   Fill `<asset-name-from-release>` with the exact asset filename listed by `gh release view` (bowser's release.yml builds `x86_64-unknown-linux-gnu` tarballs); confirm the tar path of the binary inside the tarball and adjust the `tar` flags to match.
-- [ ] `envs/browser/verify.sh` (deterministic — captures a locally served page, no external network dependency):
+- [x] `envs/browser/verify.sh` (deterministic — captures a locally served page, no external network dependency):
   ```bash
   #!/usr/bin/env bash
   set -euo pipefail
@@ -313,8 +316,8 @@ Tagging `<env>-v<N>` publishes that template to every E2B account and smoke-test
   bowser get http://127.0.0.1:8377 | grep -i "bowser-smoke"
   ```
   Confirm the exact capture invocation against `bowser get --help` (output defaults to semantic YAML; add the format flag if required).
-- [ ] Build and smoke locally: `./scripts/build_template.sh browser` then `python3 scripts/run_in_sandbox.py firna-browser-v1 envs/browser/verify.sh` — expected: version lines print and the grep finds the page title (proves Chrome launches headless and bowser captures inside E2B).
-- [ ] Lints + `./scripts/validate_manifests.sh` pass (pin-parity check now exercises the `bowser:` block).
+- [x] Build and smoke locally: `./scripts/build_template.sh browser` then `python3 scripts/run_in_sandbox.py firna-browser-v1 envs/browser/verify.sh` — expected: version lines print and the page title is found (proves Chrome launches headless and Bowser captures inside E2B). The amd64 Docker image also builds locally; the functional smoke passed on native E2B x86_64 because Chrome cannot execute reliably through Docker Desktop's arm64-to-amd64 QEMU translation.
+- [x] Lints + `./scripts/validate_manifests.sh` pass (pin-parity check now exercises the `bowser:` and `chrome:` blocks).
 - [ ] Commit, push, and release: `git commit -m "feat: add browser base env with bowser cli"`, then tag `browser-v1` and verify the release workflow publishes + smokes on all accounts.
 
 ## Milestone 5: juno integration (juno repo — after env-consolidation merges)

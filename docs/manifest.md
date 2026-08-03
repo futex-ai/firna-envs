@@ -24,6 +24,9 @@ description: Browser automation base environment
 resources:
   cpu: 2
   memory_mb: 4096
+chrome:
+  version: 151.0.7922.71-1
+  sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 bowser:
   version: 0.2.0
   sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
@@ -67,6 +70,18 @@ Optional mapping for environments that bundle the Bowser CLI.
 
 Both values must match the `BOWSER_VERSION` and `BOWSER_SHA256` pins in the
 environment Dockerfile. The archive is verified before installation.
+
+### `chrome`
+
+Optional mapping for environments that bundle Google Chrome.
+
+- `version` is the four-part Chrome version plus its Debian package revision.
+- `sha256` is the lowercase, 64-character SHA-256 digest of the amd64 Debian
+  package.
+
+Both values must match the `CHROME_VERSION` and `CHROME_SHA256` Dockerfile pins.
+The package checksum and embedded version are verified before installation, so
+the moving `current` download URL cannot silently change a build.
 
 ## Directory contract
 

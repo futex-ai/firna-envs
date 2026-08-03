@@ -23,6 +23,16 @@ Shared validation, build, and sandbox helpers live in `scripts/`. The manifest
 contract is documented in [docs/manifest.md](./docs/manifest.md), and active
 implementation work is indexed in [plans/README.md](./plans/README.md).
 
+## Environment definitions
+
+| Environment | Template | Purpose |
+| --- | --- | --- |
+| `general` | `firna-general-v2` | Debian-based command-line and build tools for everyday repository work |
+| `browser` | `firna-browser-v1` | Google Chrome, Xvfb, and the checksum-pinned Bowser CLI for browser automation |
+
+The browser definition pins both the Chrome amd64 Debian package and the
+Bowser x86_64 Linux release archive by version and SHA-256.
+
 ## Template identity and provenance
 
 An environment named `<env>` at manifest version `<N>` is published as the

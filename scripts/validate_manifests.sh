@@ -94,8 +94,8 @@ for dir in "$envs_root"/*/; do
     fi
   fi
 
-  bowser_version="$(yq -r '.bowser.version // ""' "$manifest")"
-  if [[ -n "$bowser_version" ]]; then
+  if yq -e '.bowser != null' "$manifest" >/dev/null 2>&1; then
+    bowser_version="$(yq -r '.bowser.version // ""' "$manifest")"
     bowser_sha="$(yq -r '.bowser.sha256 // ""' "$manifest")"
     if [[ ! "$bowser_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
       report_error "${manifest#"${repo_root}/"}: bowser.version must be semantic x.y.z"
@@ -110,6 +110,26 @@ for dir in "$envs_root"/*/; do
       fi
       if ! grep -Fqx "ENV BOWSER_SHA256=${bowser_sha}" "$dockerfile"; then
         report_error "${dockerfile#"${repo_root}/"}: BOWSER_SHA256 must match the manifest"
+      fi
+    fi
+  fi
+
+  if yq -e '.chrome != null' "$manifest" >/dev/null 2>&1; then
+    chrome_version="$(yq -r '.chrome.version // ""' "$manifest")"
+    chrome_sha="$(yq -r '.chrome.sha256 // ""' "$manifest")"
+    if [[ ! "$chrome_version" =~ ^[0-9]+(\.[0-9]+){3}-[0-9]+$ ]]; then
+      report_error "${manifest#"${repo_root}/"}: chrome.version must be a four-part Debian package version"
+    fi
+    if [[ ! "$chrome_sha" =~ ^[0-9a-f]{64}$ ]]; then
+      report_error "${manifest#"${repo_root}/"}: chrome.sha256 must be a lowercase SHA-256 digest"
+    fi
+    dockerfile="${dir}Dockerfile"
+    if [[ -f "$dockerfile" ]]; then
+      if ! grep -Fqx "ENV CHROME_VERSION=${chrome_version}" "$dockerfile"; then
+        report_error "${dockerfile#"${repo_root}/"}: CHROME_VERSION must match the manifest"
+      fi
+      if ! grep -Fqx "ENV CHROME_SHA256=${chrome_sha}" "$dockerfile"; then
+        report_error "${dockerfile#"${repo_root}/"}: CHROME_SHA256 must match the manifest"
       fi
     fi
   fi
