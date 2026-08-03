@@ -325,6 +325,11 @@ Tagging `<env>-v<N>` publishes that template to every E2B account and smoke-test
 
 juno deployments gain the `browser` profile and move `general` to the audited v2 template; docs point at firna-envs as the provenance home. No Rust changes expected.
 
+**Blocked 2026-08-03:** `origin/calummoore/agent-workbench-usage` is not
+contained by Juno `origin/main` and has no open or closed pull request. Per the
+plan prerequisite, this milestone has not started and must resume from the
+post-merge `main` tip.
+
 - [ ] Confirm the env-consolidation branch has merged: `git fetch origin main && git log origin/main --oneline | head -20` shows the env-consolidation PR. Rebase/branch from that main.
 - [ ] Find every template/profile reference: `rg -n "firna-general-v1|template: base|profiles:" infra .github docs crates/fna-core`.
 - [ ] Add the `browser` profile beside `general` in each config surface, and bump `general` to `firna-general-v2` in **preview/dev surfaces only** (prod bake comes last):
