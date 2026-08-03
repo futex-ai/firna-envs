@@ -23,9 +23,14 @@
 ## Prerequisites & Open Confirmations
 
 - [x] `gh` authenticated for the `futex-ai` org; Docker running locally; `yq`, `shellcheck` installed (`brew install yq shellcheck`).
-- [ ] E2B auth available: `E2B_ACCESS_TOKEN` (CLI/template builds) and `E2B_API_KEY` (SDK/sandbox boot) for the Firna account.
+- [x] E2B auth available for both Firna teams through their distinct
+  `E2B_API_KEY` values. The current E2B Python SDK builds templates with the
+  team API key, so a deprecated CLI access token is not required.
 - [ ] **Confirm E2B account topology** (Milestone 3): does preview share the production E2B team? Check `gh secret list --repo futex-ai/juno` for distinct preview keys and the E2B dashboard team list. Plan assumes two accounts (`prod`, `preview`); collapse the matrix to one if it's a single team.
-- [ ] **Confirm e2b CLI flags before first use** (`e2b template build --help`, `e2b sandbox spawn --help`) — the CLI evolves; adjust `scripts/build_template.sh` if flags differ.
+- [x] **Confirm current E2B build and sandbox APIs before first use.** E2B CLI
+  2.16.1 and Python SDK 2.36.0 were checked. The implementation uses the
+  current Python Template and Sandbox SDK APIs because the CLI template-build
+  interface no longer matches the original draft.
 - [ ] **bowser release exists?** `gh release view v0.2.0 --repo futex-ai/bowser --json assets` — if no release has ever been cut, tag `v0.2.0` in the bowser repo first (its `release.yml` builds the tarballs) or use the Milestone 4 source-build fallback.
 
 ## Global Constraints
@@ -123,7 +128,7 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
 
 `envs/general/` reproduces (or deliberately supersedes) the opaque `firna-general-v1` template as an auditable Dockerfile, built and smoke-tested as `firna-general-v2`.
 
-- [ ] `scripts/inventory.sh` (runs *inside* a sandbox; used to capture what v1 contains):
+- [x] `scripts/inventory.sh` (runs *inside* a sandbox; used to capture what v1 contains):
   ```bash
   #!/usr/bin/env bash
   set -euo pipefail
@@ -135,7 +140,7 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
   done
   env | sort
   ```
-- [ ] `scripts/run_in_sandbox.py` (shared by inventory, local smoke, and release CI; `pip install e2b` first):
+- [x] `scripts/run_in_sandbox.py` (shared by inventory, local smoke, and release CI; `pip install e2b` first):
   ```python
   #!/usr/bin/env python3
   """Boot an E2B sandbox from a template, run a local shell script inside it."""
@@ -160,9 +165,9 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
       raise SystemExit(main())
   ```
   (v1 SDK raises `CommandExitException` on non-zero exit — that is fine, the script still fails loudly; adjust to the installed SDK's API if it differs.)
-- [ ] Capture the inventory of the live template: `E2B_API_KEY=... python3 scripts/run_in_sandbox.py firna-general-v1 scripts/inventory.sh > /tmp/general-v1-inventory.txt`. Distill into `envs/general/INVENTORY.md`: base OS, package list worth keeping, tool versions, anything intentionally dropped (record each drop with a reason).
-- [ ] `envs/general/manifest.yaml` — `name: general`, `version: 2`, description, and `resources` matching the current template's CPU/RAM (visible in the E2B dashboard; default `cpu: 2`, `memory_mb: 2048` if unconfigured).
-- [ ] `envs/general/Dockerfile` — start from this draft, then adjust to INVENTORY.md parity (base image choice follows the inventory: if v1 is built on `e2bdev/base`, keep that but pin by digest via `docker buildx imagetools inspect e2bdev/base:latest`):
+- [x] Capture the inventory of the live template: `E2B_API_KEY=... python3 scripts/run_in_sandbox.py firna-general-v1 scripts/inventory.sh > /tmp/general-v1-inventory.txt`. Distill into `envs/general/INVENTORY.md`: base OS, package list worth keeping, tool versions, anything intentionally dropped (record each drop with a reason). Neither configured team resolved the legacy `firna-general-v1` alias, so the identical live `base` template in both teams was captured as the recoverable baseline and that limitation is recorded in the inventory.
+- [x] `envs/general/manifest.yaml` — `name: general`, `version: 2`, description, and `resources` matching the current template's CPU/RAM (visible in the E2B dashboard; default `cpu: 2`, `memory_mb: 2048` if unconfigured).
+- [x] `envs/general/Dockerfile` — start from this draft, then adjust to INVENTORY.md parity (base image choice follows the inventory: if v1 is built on `e2bdev/base`, keep that but pin by digest via `docker buildx imagetools inspect e2bdev/base:latest`):
   ```dockerfile
   FROM ubuntu:24.04
   ENV DEBIAN_FRONTEND=noninteractive
@@ -173,7 +178,7 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
         nodejs npm \
       && rm -rf /var/lib/apt/lists/*
   ```
-- [ ] `envs/general/verify.sh`:
+- [x] `envs/general/verify.sh`:
   ```bash
   #!/usr/bin/env bash
   set -euo pipefail
@@ -183,7 +188,7 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
   done
   ```
   Extend the list to every tool INVENTORY.md says we keep.
-- [ ] `scripts/build_template.sh`:
+- [x] `scripts/build_template.sh`:
   ```bash
   #!/usr/bin/env bash
   set -euo pipefail
@@ -199,7 +204,7 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
     --cpu-count "$cpu" --memory-mb "$mem"
   ```
   Add `e2b.toml` to `.gitignore` (the CLI writes account-specific template IDs there; the manifest is our source of truth).
-- [ ] Build and smoke against the non-production account first:
+- [x] Build and smoke against the non-production account first:
   ```bash
   E2B_ACCESS_TOKEN=... ./scripts/build_template.sh general
   E2B_API_KEY=... python3 scripts/run_in_sandbox.py firna-general-v2 envs/general/verify.sh

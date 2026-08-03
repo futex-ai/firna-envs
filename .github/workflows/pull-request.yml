@@ -42,3 +42,12 @@ jobs:
 
       - name: Validate manifests
         run: ./scripts/validate_manifests.sh
+
+      - name: Test build helper
+        run: ./tests/build_template_test.sh
+
+      - name: Check Python scripts
+        run: |
+          python3 -m pip install --requirement requirements.txt
+          python3 -m py_compile scripts/build_template.py scripts/run_in_sandbox.py
+          python3 -m unittest discover --start-directory tests --pattern 'test_*.py'

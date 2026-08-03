@@ -35,8 +35,8 @@ change the manifest version and publish a new tag instead.
 
 ## Validate and build locally
 
-Install Docker, `yq`, `shellcheck`, and the E2B CLI, then authenticate the CLI
-to the intended E2B team.
+Install Docker, `yq`, `shellcheck`, and Python 3. Authenticate to the intended
+E2B team by setting its API key only for the command that needs it.
 
 Validate the repository before building:
 
@@ -45,21 +45,26 @@ git ls-files '*.sh' | xargs shellcheck
 ./scripts/validate_manifests.sh
 ```
 
-To build an environment directly with the current E2B CLI, derive its
-immutable identity from the manifest:
+Install the pinned Python SDK when inventorying or smoke-testing a published
+template:
 
 ```bash
-env_name=general
-version="$(yq -r '.version' "envs/${env_name}/manifest.yaml")"
-cpu="$(yq -r '.resources.cpu' "envs/${env_name}/manifest.yaml")"
-memory="$(yq -r '.resources.memory_mb' "envs/${env_name}/manifest.yaml")"
-e2b template create "firna-${env_name}-v${version}" \
-  --path "envs/${env_name}" --dockerfile Dockerfile \
-  --cpu-count "$cpu" --memory-mb "$memory"
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 ```
 
-The repository build helper introduced alongside the first environment wraps
-the same operation and enforces the manifest contract.
+Activate the virtual environment, then build and smoke-test an immutable
+template with an explicit Firna team API key:
+
+```bash
+source .venv/bin/activate
+E2B_API_KEY=... ./scripts/build_template.sh general
+E2B_API_KEY=... .venv/bin/python scripts/run_in_sandbox.py \
+  firna-general-v2 envs/general/verify.sh
+```
+
+The build helper derives the template name and resources from the manifest and
+refuses to rebuild a name already present in the selected E2B team.
 
 ## Deployment integration
 
