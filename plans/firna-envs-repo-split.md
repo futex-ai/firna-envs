@@ -117,7 +117,7 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
           run: ./scripts/validate_manifests.sh
   ```
 - [x] Run each lint locally (shellcheck, the two docker runs, `./scripts/validate_manifests.sh`) — all pass with zero envs.
-- [ ] Commit and push: `git add -A && git commit -m "feat: bootstrap firna-envs repo with lint ci" && git push -u origin main` (open a PR instead if branch protection is configured). Verify the PR/branch CI is green.
+- [x] Commit and push: `git add -A && git commit -m "feat: bootstrap firna-envs repo with lint ci" && git push -u origin main` (open a PR instead if branch protection is configured). Verify the PR/branch CI is green.
 
 ## Milestone 2: `general` env — recover the source of truth
 
