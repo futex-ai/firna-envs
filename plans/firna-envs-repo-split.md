@@ -210,7 +210,7 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
   E2B_API_KEY=... python3 scripts/run_in_sandbox.py firna-general-v2 envs/general/verify.sh
   ```
   Expected: verify output lists every tool, exit 0. Iterate the Dockerfile until parity with INVENTORY.md.
-- [ ] Run `./scripts/validate_manifests.sh` and the lint suite; commit and push: `git commit -m "feat: add general base env (firna-general-v2)"`.
+- [x] Run `./scripts/validate_manifests.sh` and the lint suite; commit and push: `git commit -m "feat: add general base env (firna-general-v2)"`.
 
 ## Milestone 3: release automation
 
