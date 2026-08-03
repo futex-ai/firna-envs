@@ -262,7 +262,7 @@ Tagging `<env>-v<N>` publishes that template to every E2B account and smoke-test
   ```
   (Drop the matrix if there is a single account.)
 - [x] Add the release/provenance section to `README.md`: tag → template name mapping, immutability rule, how a user audits a template (tag ↔ Dockerfile ↔ release run logs).
-- [ ] Dry-run via `workflow_dispatch` with `general-v2`; then tag for real: `git tag general-v2 && git push origin general-v2`. Verify both matrix legs pass.
+- [ ] Dry-run via `workflow_dispatch` with `general-v2`; then tag for real: `git tag general-v2 && git push origin general-v2`. Verify both matrix legs pass. The immutable tag is published and both matrix legs pass. GitHub rejected the attempted manual dispatch because a new `workflow_dispatch` workflow is not registered until it reaches the default branch; repeat that idempotent dispatch after PR #1 merges.
 - [x] Commit and push: `git commit -m "feat: add template release workflow"`.
 
 ## Milestone 4: `browser` env with bowser
@@ -275,6 +275,7 @@ Tagging `<env>-v<N>` publishes that template to every E2B account and smoke-test
   curl -fsSL <tarball-url> | shasum -a 256
   ```
   If cutting a release is not possible yet, use the fallback: a multi-stage build (`FROM rust:1.89-slim AS builder`, `git clone --depth 1 --branch v0.2.0 https://github.com/futex-ai/bowser`, `cargo build --release -p bowser-cli`, copy `target/release/bowser`) and pin the git tag instead of a tarball hash — still record `bowser.version` in the manifest.
+  The release asset is `https://github.com/futex-ai/bowser/releases/download/v0.2.0/bowser-0.2.0-x86_64-unknown-linux-gnu.tar.gz`; its verified SHA-256 is `92458946103fe16e16e1a8eb07398b6d21903d66286776a90c151e5c9823c7d9`.
 - [x] Pin the Google Chrome amd64 Debian package version and SHA-256 in the
   browser manifest and Dockerfile. Validate both before installation so the
   moving `current` URL cannot silently change a build.
@@ -315,10 +316,10 @@ Tagging `<env>-v<N>` publishes that template to every E2B account and smoke-test
   sleep 1
   bowser get http://127.0.0.1:8377 | grep -i "bowser-smoke"
   ```
-  Confirm the exact capture invocation against `bowser get --help` (output defaults to semantic YAML; add the format flag if required).
+  Confirm the exact capture invocation against `bowser get --help` (output defaults to semantic YAML; add the format flag if required). Bowser v0.2.0 has no version flag, so the implemented verifier checks its help contract, prints the checksum-pinned manifest version, and exercises `bowser get --format yaml` against the local page.
 - [x] Build and smoke locally: `./scripts/build_template.sh browser` then `python3 scripts/run_in_sandbox.py firna-browser-v1 envs/browser/verify.sh` — expected: version lines print and the page title is found (proves Chrome launches headless and Bowser captures inside E2B). The amd64 Docker image also builds locally; the functional smoke passed on native E2B x86_64 because Chrome cannot execute reliably through Docker Desktop's arm64-to-amd64 QEMU translation.
 - [x] Lints + `./scripts/validate_manifests.sh` pass (pin-parity check now exercises the `bowser:` and `chrome:` blocks).
-- [ ] Commit, push, and release: `git commit -m "feat: add browser base env with bowser cli"`, then tag `browser-v1` and verify the release workflow publishes + smokes on all accounts.
+- [x] Commit, push, and release: `git commit -m "feat: add browser base env with bowser cli"`, then tag `browser-v1` and verify the release workflow publishes + smokes on all accounts.
 
 ## Milestone 5: juno integration (juno repo — after env-consolidation merges)
 
