@@ -1,0 +1,3 @@
+# Full base images follow their distribution package repositories, so pinning
+# every apt package version would make routine security updates impractical.
+ignored: [DL3008]

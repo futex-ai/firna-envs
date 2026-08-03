@@ -1,0 +1,6 @@
+name: general
+version: 2
+description: Default Firna base environment
+resources:
+  cpu: 2
+  memory_mb: 2048
