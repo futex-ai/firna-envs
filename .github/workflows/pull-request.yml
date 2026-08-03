@@ -1,0 +1,44 @@
+name: pull-request
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  YQ_VERSION: v4.53.3
+
+jobs:
+  lint:
+    name: Lint definitions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install yq
+        run: |
+          sudo curl --fail --silent --show-error --location --retry 5 \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
+            --output /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: ShellCheck
+        run: git ls-files '*.sh' | xargs -r shellcheck
+
+      - name: Hadolint
+        run: |
+          mapfile -t files < <(git ls-files 'envs/*/Dockerfile')
+          if [ "${#files[@]}" -gt 0 ]; then
+            docker run --rm -v "$PWD:/repo" -w /repo \
+              hadolint/hadolint:v2.15.1-debian \
+              hadolint --config .hadolint.yaml "${files[@]}"
+          fi
+
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+      - name: Validate manifests
+        run: ./scripts/validate_manifests.sh

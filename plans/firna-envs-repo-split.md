@@ -22,7 +22,7 @@
 
 ## Prerequisites & Open Confirmations
 
-- [ ] `gh` authenticated for the `futex-ai` org; Docker running locally; `yq`, `shellcheck` installed (`brew install yq shellcheck`).
+- [x] `gh` authenticated for the `futex-ai` org; Docker running locally; `yq`, `shellcheck` installed (`brew install yq shellcheck`).
 - [ ] E2B auth available: `E2B_ACCESS_TOKEN` (CLI/template builds) and `E2B_API_KEY` (SDK/sandbox boot) for the Firna account.
 - [ ] **Confirm E2B account topology** (Milestone 3): does preview share the production E2B team? Check `gh secret list --repo futex-ai/juno` for distinct preview keys and the E2B dashboard team list. Plan assumes two accounts (`prod`, `preview`); collapse the matrix to one if it's a single team.
 - [ ] **Confirm e2b CLI flags before first use** (`e2b template build --help`, `e2b sandbox spawn --help`) — the CLI evolves; adjust `scripts/build_template.sh` if flags differ.
@@ -44,17 +44,17 @@
 
 Public repo exists with layout, docs, conventions, manifest validation, and a green PR lint pipeline — no envs yet. Runs in the new firna-envs workspace.
 
-- [ ] Create the repo and first commit scaffold:
+- [x] Create the repo and first commit scaffold:
   ```bash
   gh repo create futex-ai/firna-envs --public --description "Source of truth for Firna base environment (E2B template) definitions" --clone
   # or, if the Conductor workspace already has an empty repo checkout, work in place
   mkdir -p envs scripts docs plans .github/workflows
   ```
-- [ ] Copy this plan file into the new repo as `plans/firna-envs-repo-split.md` and create a one-entry `plans/README.md` (Active: this plan).
-- [ ] `LICENSE`: MIT, `Copyright (c) 2026 Futex AI` (matches bowser).
-- [ ] `README.md` with sections: what this repo is (base envs your Firna agents run in, publicly inspectable); layout (`envs/<name>/{manifest.yaml,Dockerfile,verify.sh}`); template naming + immutability (`firna-<env>-v<N>`, tag `<env>-v<N>` ↔ template name ↔ release CI run = provenance chain); how to build locally; how deployments consume templates (juno profile map, link to juno `docs/configuration/system-config.md`).
-- [ ] `AGENTS.md` (symlink `CLAUDE.md` → `AGENTS.md`, as bowser does) stating the repo rules: definitions only (no service/runtime code); immutable versioning; required files per env; manifest↔Dockerfile pin parity; no secrets committed; PR CI must pass; conventional commits (lowercase); every env change bumps `version` and updates `verify.sh` to cover new tooling.
-- [ ] `docs/manifest.md` documenting the manifest schema:
+- [x] Copy this plan file into the new repo as `plans/firna-envs-repo-split.md` and create a one-entry `plans/README.md` (Active: this plan).
+- [x] `LICENSE`: MIT, `Copyright (c) 2026 Futex AI` (matches bowser).
+- [x] `README.md` with sections: what this repo is (base envs your Firna agents run in, publicly inspectable); layout (`envs/<name>/{manifest.yaml,Dockerfile,verify.sh}`); template naming + immutability (`firna-<env>-v<N>`, tag `<env>-v<N>` ↔ template name ↔ release CI run = provenance chain); how to build locally; how deployments consume templates (juno profile map, link to juno `docs/configuration/system-config.md`).
+- [x] `AGENTS.md` (symlink `CLAUDE.md` → `AGENTS.md`, as bowser does) stating the repo rules: definitions only (no service/runtime code); immutable versioning; required files per env; manifest↔Dockerfile pin parity; no secrets committed; PR CI must pass; conventional commits (lowercase); every env change bumps `version` and updates `verify.sh` to cover new tooling.
+- [x] `docs/manifest.md` documenting the manifest schema:
   ```yaml
   name: general            # must equal the directory name
   version: 2               # integer; template becomes firna-<name>-v<version>
@@ -67,8 +67,8 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
     version: 0.2.0
     sha256: <sha256 of the x86_64-unknown-linux-gnu release tarball>
   ```
-- [ ] `.hadolint.yaml` with `ignored: [DL3008]` (apt version pinning is impractical for full base images; record the rationale as a comment).
-- [ ] `scripts/validate_manifests.sh`:
+- [x] `.hadolint.yaml` with `ignored: [DL3008]` (apt version pinning is impractical for full base images; record the rationale as a comment).
+- [x] `scripts/validate_manifests.sh`:
   ```bash
   #!/usr/bin/env bash
   set -euo pipefail
@@ -95,7 +95,7 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
   done
   exit "$status"
   ```
-- [ ] `.github/workflows/pull-request.yml`:
+- [x] `.github/workflows/pull-request.yml`:
   ```yaml
   name: pull-request
   on: pull_request
@@ -116,7 +116,7 @@ Public repo exists with layout, docs, conventions, manifest validation, and a gr
         - name: validate manifests
           run: ./scripts/validate_manifests.sh
   ```
-- [ ] Run each lint locally (shellcheck, the two docker runs, `./scripts/validate_manifests.sh`) — all pass with zero envs.
+- [x] Run each lint locally (shellcheck, the two docker runs, `./scripts/validate_manifests.sh`) — all pass with zero envs.
 - [ ] Commit and push: `git add -A && git commit -m "feat: bootstrap firna-envs repo with lint ci" && git push -u origin main` (open a PR instead if branch protection is configured). Verify the PR/branch CI is green.
 
 ## Milestone 2: `general` env — recover the source of truth

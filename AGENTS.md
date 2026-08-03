@@ -1,5 +1,26 @@
 # A guide for agents
 
+## firna-envs repository rules
+
+- Keep this repository limited to E2B base-environment definitions, validation,
+  documentation, and release automation. Service code and runtime orchestration
+  belong in the Firna platform repository.
+- Treat every published template name as immutable. Every environment change
+  must increment `version` in its manifest and publish a new
+  `firna-<env>-v<N>` template.
+- Every environment directory must contain `manifest.yaml`, `Dockerfile`, and
+  an executable `verify.sh`. `INVENTORY.md` is the only optional file.
+- Keep manifest tool versions and checksums exactly aligned with the pins in the
+  environment Dockerfile.
+- Update `verify.sh` whenever an environment adds or changes tooling so the
+  release smoke test covers the public contract.
+- Never commit credentials, E2B team identifiers, template IDs, account IDs, or
+  generated `e2b.toml` files.
+- All shell scripts must start with `#!/usr/bin/env bash` and
+  `set -euo pipefail`, remain executable, and pass ShellCheck.
+- Pull-request lint CI must pass before merge. Use lowercase Conventional
+  Commit messages.
+
 ## General
 
 - When adding new packages or services, always attempt to build them to check for errors
