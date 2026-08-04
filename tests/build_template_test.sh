@@ -34,7 +34,7 @@ E2B_API_KEY=test-key \
   MOCK_PYTHON_CALLS="$calls_path" \
   "${repo_root}/scripts/build_template.sh" general
 
-expected_call="${repo_root}/scripts/build_template.py --environment-dir ${repo_root}/envs/general --template firna-general-v2 --cpu 2 --memory-mb 2048"
+expected_call="${repo_root}/scripts/build_template.py --environment-dir ${repo_root}/envs/general --template firna-general-v3 --cpu 2 --memory-mb 2048"
 if [[ "$(<"$calls_path")" != "$expected_call" ]]; then
   printf 'unexpected create call: %s\n' "$(<"$calls_path")" >&2
   exit 1

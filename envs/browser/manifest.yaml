@@ -1,9 +1,12 @@
 name: browser
-version: 1
-description: Browser automation base environment with Google Chrome, Xvfb, and Bowser
+version: 2
+description: Browser automation base environment with Chrome, Bowser, and durable-drive mount support
 resources:
   cpu: 2
   memory_mb: 4096
+gcsfuse:
+  version: 3.11.2
+  repository_key_sha256: 3ecc63922b7795eb23fdc449ff9396f9114cb3cf186d6f5b53ad4cc3ebfbb11f
 chrome:
   version: 151.0.7922.71-1
   sha256: c86cafc697ecdb88259312cef47e464d1278643610500a7c9104e6bb1af3ba5c

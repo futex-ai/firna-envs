@@ -42,6 +42,13 @@ moving `latest` tag.
 - Keep the E2B-provided Node.js and Python installations from the pinned base
   image rather than replacing them with older distribution builds.
 
+## Deliberate v3 changes
+
+- Add FUSE 3 and checksum-verified, version-pinned gcsfuse 3.11.2 so every
+  general sandbox can mount its owning agent tree's durable drive.
+- Verify the gcsfuse command, FUSE helper, mountpoint utility, and `/dev/fuse`
+  device in the release smoke test.
+
 ## Intentional omissions
 
 Rust, Go, Java, and Docker were absent from the recovered template and remain

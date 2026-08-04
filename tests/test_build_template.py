@@ -26,7 +26,7 @@ class BuildTemplateTests(unittest.TestCase):
                     "--environment-dir",
                     "envs/general",
                     "--template",
-                    "firna-general-v2",
+                    "firna-general-v3",
                     "--cpu",
                     "2",
                     "--memory-mb",
@@ -48,7 +48,7 @@ class BuildTemplateTests(unittest.TestCase):
                     "--environment-dir",
                     "envs/general",
                     "--template",
-                    "firna-general-v2",
+                    "firna-general-v3",
                     "--cpu",
                     "2",
                     "--memory-mb",
@@ -57,7 +57,7 @@ class BuildTemplateTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 73)
-        exists.assert_called_once_with("firna-general-v2")
+        exists.assert_called_once_with("firna-general-v3")
         build.assert_not_called()
 
     def test_build_uses_dockerfile_and_resources(self) -> None:
@@ -78,7 +78,7 @@ class BuildTemplateTests(unittest.TestCase):
                 template.return_value = template_instance
                 build_template.build_template(
                     environment_dir,
-                    "firna-general-v2",
+                    "firna-general-v3",
                     2,
                     2048,
                 )
@@ -89,7 +89,7 @@ class BuildTemplateTests(unittest.TestCase):
             )
             template.build.assert_called_once_with(
                 definition,
-                "firna-general-v2",
+                "firna-general-v3",
                 cpu_count=2,
                 memory_mb=2048,
                 on_build_logs=logger.return_value,
@@ -107,7 +107,7 @@ class BuildTemplateTests(unittest.TestCase):
                     "--environment-dir",
                     "envs/general",
                     "--template",
-                    "firna-general-v2",
+                    "firna-general-v3",
                     "--cpu",
                     "2",
                     "--memory-mb",
@@ -117,7 +117,7 @@ class BuildTemplateTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 0)
-        exists.assert_called_once_with("firna-general-v2")
+        exists.assert_called_once_with("firna-general-v3")
         build.assert_not_called()
 
 
