@@ -27,11 +27,13 @@ implementation work is indexed in [plans/README.md](./plans/README.md).
 
 | Environment | Template | Purpose |
 | --- | --- | --- |
-| `general` | `firna-general-v2` | Debian-based command-line and build tools for everyday repository work |
-| `browser` | `firna-browser-v1` | Google Chrome, Xvfb, and the checksum-pinned Bowser CLI for browser automation |
+| `general` | `firna-general-v3` | Debian-based command-line and build tools for everyday repository work |
+| `browser` | `firna-browser-v2` | Google Chrome, Xvfb, and the checksum-pinned Bowser CLI for browser automation |
 
 The browser definition pins both the Chrome amd64 Debian package and the
-Bowser x86_64 Linux release archive by version and SHA-256.
+Bowser x86_64 Linux release archive by version and SHA-256. Every environment
+also pins gcsfuse and the Google repository key checksum so Firna can mount the
+owning agent tree's durable drive at runtime.
 
 ## Template identity and provenance
 
@@ -70,7 +72,7 @@ template with an explicit Firna team API key:
 source .venv/bin/activate
 E2B_API_KEY=... ./scripts/build_template.sh general
 E2B_API_KEY=... .venv/bin/python scripts/run_in_sandbox.py \
-  firna-general-v2 envs/general/verify.sh
+  firna-general-v3 envs/general/verify.sh
 ```
 
 The build helper derives the template name and resources from the manifest and

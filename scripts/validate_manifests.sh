@@ -81,6 +81,31 @@ for dir in "$envs_root"/*/; do
     fi
   fi
 
+  if ! yq -e '.gcsfuse != null' "$manifest" >/dev/null 2>&1; then
+    report_error "${manifest#"${repo_root}/"}: gcsfuse is required"
+  else
+    gcsfuse_version="$(yq -r '.gcsfuse.version // ""' "$manifest")"
+    gcsfuse_key_sha="$(yq -r '.gcsfuse.repository_key_sha256 // ""' "$manifest")"
+    if [[ ! "$gcsfuse_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      report_error "${manifest#"${repo_root}/"}: gcsfuse.version must be semantic x.y.z"
+    fi
+    if [[ ! "$gcsfuse_key_sha" =~ ^[0-9a-f]{64}$ ]]; then
+      report_error "${manifest#"${repo_root}/"}: gcsfuse.repository_key_sha256 must be a lowercase SHA-256 digest"
+    fi
+    dockerfile="${dir}Dockerfile"
+    if [[ -f "$dockerfile" ]]; then
+      if ! grep -Fqx "ENV GCSFUSE_VERSION=${gcsfuse_version}" "$dockerfile"; then
+        report_error "${dockerfile#"${repo_root}/"}: GCSFUSE_VERSION must match the manifest"
+      fi
+      if ! grep -Fqx "ENV GOOGLE_CLOUD_APT_CHECKSUM=${gcsfuse_key_sha}" "$dockerfile"; then
+        report_error "${dockerfile#"${repo_root}/"}: GOOGLE_CLOUD_APT_CHECKSUM must match the manifest"
+      fi
+      if ! grep -Fq "\"gcsfuse=\${GCSFUSE_VERSION}\"" "$dockerfile"; then
+        report_error "${dockerfile#"${repo_root}/"}: gcsfuse must install the exact manifest version"
+      fi
+    fi
+  fi
+
   verify_script="${dir}verify.sh"
   if [[ -f "$verify_script" ]]; then
     if [[ ! -x "$verify_script" ]]; then
@@ -91,6 +116,12 @@ for dir in "$envs_root"/*/; do
     fi
     if ! grep -Fxq 'set -euo pipefail' "$verify_script"; then
       report_error "${verify_script#"${repo_root}/"} must enable Bash strict mode"
+    fi
+    if ! grep -Fq 'gcsfuse --version' "$verify_script"; then
+      report_error "${verify_script#"${repo_root}/"} must verify gcsfuse"
+    fi
+    if ! grep -Fq '[[ -c /dev/fuse ]]' "$verify_script"; then
+      report_error "${verify_script#"${repo_root}/"} must verify the FUSE device"
     fi
   fi
 

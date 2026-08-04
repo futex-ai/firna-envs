@@ -3,9 +3,13 @@ set -euo pipefail
 
 readonly expected_bowser_version='0.2.0'
 readonly expected_chrome_version='151.0.7922.71'
+readonly expected_gcsfuse_version='3.11.2'
 
 command -v bowser >/dev/null
+command -v fusermount3 >/dev/null
+command -v gcsfuse >/dev/null
 command -v google-chrome-stable >/dev/null
+command -v mountpoint >/dev/null
 command -v Xvfb >/dev/null
 bowser_help="$(bowser --help)"
 [[ "$bowser_help" == *'Render web pages into compact YAML'* ]]
@@ -15,6 +19,11 @@ chrome_version="$(google-chrome-stable --version | sed 's/[[:space:]]*$//')"
 printf 'bowser %s\n' "$expected_bowser_version"
 printf '%s\n' "$chrome_version"
 printf 'Xvfb %s\n' "$(command -v Xvfb)"
+gcsfuse_version="$(gcsfuse --version)"
+[[ "$gcsfuse_version" == "gcsfuse version ${expected_gcsfuse_version} "* ]]
+[[ -c /dev/fuse ]]
+printf '%s\n' "$gcsfuse_version"
+printf 'FUSE device %s\n' /dev/fuse
 
 site_root="$(mktemp -d)"
 server_pid=''

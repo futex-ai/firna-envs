@@ -1,6 +1,8 @@
 FROM ubuntu:24.04@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV GCSFUSE_VERSION=3.11.2
+ENV GOOGLE_CLOUD_APT_CHECKSUM=3ecc63922b7795eb23fdc449ff9396f9114cb3cf186d6f5b53ad4cc3ebfbb11f
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -9,9 +11,26 @@ RUN apt-get update \
         dbus \
         fonts-liberation \
         fonts-noto-color-emoji \
+        fuse3 \
+        gnupg \
         libasound2t64 \
+        lsb-release \
         python3 \
         xvfb \
+    && curl --fail --silent --show-error --location --retry 5 \
+        https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+        --output /tmp/google-cloud-apt-key.gpg \
+    && printf '%s  %s\n' "$GOOGLE_CLOUD_APT_CHECKSUM" \
+        /tmp/google-cloud-apt-key.gpg > /tmp/google-cloud-apt-key.sha256 \
+    && sha256sum --check /tmp/google-cloud-apt-key.sha256 \
+    && gpg --dearmor --yes --output /usr/share/keyrings/cloud.google.gpg \
+        /tmp/google-cloud-apt-key.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt gcsfuse-$(lsb_release --codename --short) main" \
+        > /etc/apt/sources.list.d/gcsfuse.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends "gcsfuse=${GCSFUSE_VERSION}" \
+    && test "$(dpkg-query --show --showformat='${Version}' gcsfuse)" = "$GCSFUSE_VERSION" \
+    && rm /tmp/google-cloud-apt-key.gpg /tmp/google-cloud-apt-key.sha256 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CHROME_VERSION=151.0.7922.71-1

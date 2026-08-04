@@ -1,6 +1,9 @@
 name: general
-version: 2
-description: Default Firna base environment
+version: 3
+description: Default Firna base environment with durable-drive mount support
 resources:
   cpu: 2
   memory_mb: 2048
+gcsfuse:
+  version: 3.11.2
+  repository_key_sha256: 3ecc63922b7795eb23fdc449ff9396f9114cb3cf186d6f5b53ad4cc3ebfbb11f

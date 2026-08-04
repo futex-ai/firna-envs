@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+readonly expected_gcsfuse_version='3.11.2'
+
 if [[ "$(whoami)" != "user" ]]; then
   printf 'expected default user "user", got "%s"\n' "$(whoami)" >&2
   exit 1
@@ -10,7 +12,7 @@ if [[ "$HOME" != "/home/user" ]]; then
   exit 1
 fi
 
-for command_name in git curl wget jq python3 pip3 node npm rg unzip zip cc make pkg-config; do
+for command_name in git curl wget jq python3 pip3 node npm rg unzip zip cc make pkg-config gcsfuse fusermount3 mountpoint; do
   command_path="$(command -v "$command_name")"
   printf 'OK %s: %s\n' "$command_name" "$command_path"
 done
@@ -29,3 +31,8 @@ zip -v | head -n 2 | tail -n 1
 cc --version | head -n 1
 make --version | head -n 1
 pkg-config --version
+gcsfuse_version="$(gcsfuse --version)"
+[[ "$gcsfuse_version" == "gcsfuse version ${expected_gcsfuse_version} "* ]]
+[[ -c /dev/fuse ]]
+printf '%s\n' "$gcsfuse_version"
+printf 'FUSE device %s\n' /dev/fuse
