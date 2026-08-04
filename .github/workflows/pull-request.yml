@@ -46,6 +46,9 @@ jobs:
       - name: Test build helper
         run: ./tests/build_template_test.sh
 
+      - name: Test release workflow
+        run: ./tests/release_workflow_test.sh
+
       - name: Check Python scripts
         run: |
           python3 -m pip install --requirement requirements.txt
