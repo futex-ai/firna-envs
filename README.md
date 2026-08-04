@@ -87,7 +87,9 @@ the environment's `verify.sh`. Publishing is protected by the repository's
 
 The release path is idempotent: if the immutable template name already exists,
 automation leaves it unchanged and still smoke-tests it. A normal local build
-continues to reject an existing name so accidental replacement is visible.
+continues to reject an existing name so accidental replacement is visible. The
+production and preview matrix runs one account at a time so an in-progress
+template publication cannot be mistaken for a ready immutable release.
 
 To audit a deployed template, start with its template name, remove the `firna-`
 prefix to find the Git tag, and inspect that tag's manifest and Dockerfile. The
