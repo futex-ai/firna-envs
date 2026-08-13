@@ -1,5 +1,5 @@
 name: browser
-version: 3
+version: 4
 description: Browser automation base environment with Chrome, Bowser, the screen stack, and durable-drive mount support
 resources:
   cpu: 2
@@ -8,8 +8,8 @@ gcsfuse:
   version: 3.11.2
   repository_key_sha256: 3ecc63922b7795eb23fdc449ff9396f9114cb3cf186d6f5b53ad4cc3ebfbb11f
 chrome:
-  version: 151.0.7922.71-1
-  sha256: c86cafc697ecdb88259312cef47e464d1278643610500a7c9104e6bb1af3ba5c
+  version: 151.0.7922.137-1
+  sha256: e6dabf044cf9cd0279cfe86efa431682c18bfc06d06339ce055aaa87ae871727
 bowser:
   version: 0.2.0
   sha256: 92458946103fe16e16e1a8eb07398b6d21903d66286776a90c151e5c9823c7d9

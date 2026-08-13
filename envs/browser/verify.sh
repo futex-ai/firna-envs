@@ -2,7 +2,7 @@
 set -euo pipefail
 
 readonly expected_bowser_version='0.2.0'
-readonly expected_chrome_version='151.0.7922.71'
+readonly expected_chrome_version='151.0.7922.137'
 readonly expected_gcsfuse_version='3.11.2'
 
 command -v bowser >/dev/null
