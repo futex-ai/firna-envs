@@ -1,6 +1,6 @@
 name: browser
-version: 2
-description: Browser automation base environment with Chrome, Bowser, and durable-drive mount support
+version: 3
+description: Browser automation base environment with Chrome, Bowser, the screen stack, and durable-drive mount support
 resources:
   cpu: 2
   memory_mb: 4096
