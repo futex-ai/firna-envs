@@ -38,8 +38,8 @@ RUN apt-get update \
     && rm /tmp/google-cloud-apt-key.gpg /tmp/google-cloud-apt-key.sha256 \
     && rm -rf /var/lib/apt/lists/*
 
-ENV CHROME_VERSION=151.0.7922.71-1
-ENV CHROME_SHA256=c86cafc697ecdb88259312cef47e464d1278643610500a7c9104e6bb1af3ba5c
+ENV CHROME_VERSION=151.0.7922.137-1
+ENV CHROME_SHA256=e6dabf044cf9cd0279cfe86efa431682c18bfc06d06339ce055aaa87ae871727
 
 RUN curl --fail --silent --show-error --location --retry 5 \
         https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
