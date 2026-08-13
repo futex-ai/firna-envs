@@ -11,6 +11,11 @@ command -v gcsfuse >/dev/null
 command -v google-chrome-stable >/dev/null
 command -v mountpoint >/dev/null
 command -v Xvfb >/dev/null
+command -v firna-screen >/dev/null
+command -v fluxbox >/dev/null
+command -v websockify >/dev/null
+command -v x11vnc >/dev/null
+command -v xdpyinfo >/dev/null
 bowser_help="$(bowser --help)"
 [[ "$bowser_help" == *'Render web pages into compact YAML'* ]]
 
@@ -58,3 +63,27 @@ capture="$(
 )"
 [[ "$capture" == *'bowser-smoke'* ]]
 printf '%s\n' 'OK browser capture'
+
+loopback_listening() {
+  local hex_port
+  hex_port="$(printf '%04X' "$1")"
+  local addresses
+  addresses="$(awk -v suffix=":${hex_port}" \
+    '$2 ~ suffix"$" && $4 == "0A" { split($2, parts, ":"); print parts[1] }' \
+    /proc/net/tcp /proc/net/tcp6 2>/dev/null | sort -u)"
+  [[ -n "$addresses" ]]
+  while IFS= read -r address; do
+    [[ "$address" == '0100007F' \
+      || "$address" == '00000000000000000000000001000000' ]]
+  done <<<"$addresses"
+}
+
+firna-screen ensure
+loopback_listening 6080
+loopback_listening 6081
+pgrep -af x11vnc | grep -F -- '-viewonly' | grep -Fq 'firna-watch'
+firna-screen ensure
+watch_count="$(pgrep -cf 'x11vnc.*firna-watch')"
+[[ "$watch_count" == '1' ]]
+printf 'firna-screen watch bridge %s\n' 6080
+printf 'firna-screen control bridge %s\n' 6081

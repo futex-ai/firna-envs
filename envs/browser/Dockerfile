@@ -15,7 +15,12 @@ RUN apt-get update \
         gnupg \
         libasound2t64 \
         lsb-release \
+        fluxbox \
+        procps \
         python3 \
+        websockify \
+        x11-utils \
+        x11vnc \
         xvfb \
     && curl --fail --silent --show-error --location --retry 5 \
         https://packages.cloud.google.com/apt/doc/apt-key.gpg \
@@ -62,3 +67,103 @@ RUN curl --fail --silent --show-error --location --retry 5 \
     && rm -rf /tmp/bowser /tmp/bowser.tar.gz /tmp/bowser.sha256
 
 ENV BOWSER_CHROME_PATH=/usr/bin/google-chrome-stable
+
+# hadolint ignore=SC2016
+RUN mkdir -p /etc/firna-screen \
+    && printf '%s\n' \
+        'session.screen0.toolbar.visible: false' \
+        '# firna-screen-wm' \
+        > /etc/firna-screen/fluxbox-rc \
+    && printf '%s\n' \
+        '#!/bin/sh' \
+        'set -eu' \
+        '' \
+        'DISPLAY_ID=":0"' \
+        'WATCH_VNC_PORT=5900' \
+        'CONTROL_VNC_PORT=5901' \
+        'WATCH_BRIDGE_PORT=6080' \
+        'CONTROL_BRIDGE_PORT=6081' \
+        'LOG_DIR="/tmp/firna-screen"' \
+        'READY_TIMEOUT_SECONDS=30' \
+        '' \
+        'port_listening() {' \
+        '    hex_port=$(printf '\''%04X'\'' "$1")' \
+        '    awk -v suffix=":${hex_port}" \' \
+        '        '\''$2 ~ suffix"$" && $4 == "0A" { found = 1 } END { exit found ? 0 : 1 }'\'' \' \
+        '        /proc/net/tcp /proc/net/tcp6 2>/dev/null' \
+        '}' \
+        '' \
+        'wait_for_port() {' \
+        '    waited=0' \
+        '    while ! port_listening "$1"; do' \
+        '        if [ "$waited" -ge "$READY_TIMEOUT_SECONDS" ]; then' \
+        '            echo "firna-screen: port $1 did not start listening" >&2' \
+        '            exit 1' \
+        '        fi' \
+        '        sleep 1' \
+        '        waited=$((waited + 1))' \
+        '    done' \
+        '}' \
+        '' \
+        'wait_for_display() {' \
+        '    waited=0' \
+        '    while ! xdpyinfo -display "$DISPLAY_ID" >/dev/null 2>&1; do' \
+        '        if [ "$waited" -ge "$READY_TIMEOUT_SECONDS" ]; then' \
+        '            echo "firna-screen: display $DISPLAY_ID did not become ready" >&2' \
+        '            exit 1' \
+        '        fi' \
+        '        sleep 1' \
+        '        waited=$((waited + 1))' \
+        '    done' \
+        '}' \
+        '' \
+        'ensure() {' \
+        '    if port_listening "$WATCH_BRIDGE_PORT" && port_listening "$CONTROL_BRIDGE_PORT"; then' \
+        '        exit 0' \
+        '    fi' \
+        '    mkdir -p "$LOG_DIR"' \
+        '    if ! xdpyinfo -display "$DISPLAY_ID" >/dev/null 2>&1; then' \
+        '        nohup Xvfb "$DISPLAY_ID" -screen 0 1280x800x24 -nolisten tcp \' \
+        '            >"$LOG_DIR/xvfb.log" 2>&1 &' \
+        '        wait_for_display' \
+        '    fi' \
+        '    if ! pgrep -f "fluxbox.*firna-screen" >/dev/null 2>&1; then' \
+        '        DISPLAY="$DISPLAY_ID" nohup fluxbox -rc /etc/firna-screen/fluxbox-rc \' \
+        '            -display "$DISPLAY_ID" >"$LOG_DIR/fluxbox.log" 2>&1 &' \
+        '    fi' \
+        '    if ! port_listening "$WATCH_VNC_PORT"; then' \
+        '        x11vnc -display "$DISPLAY_ID" -viewonly -shared -forever -nopw \' \
+        '            -localhost -rfbport "$WATCH_VNC_PORT" -desktop firna-watch \' \
+        '            -o "$LOG_DIR/x11vnc-watch.log" -bg >/dev/null 2>&1 || true' \
+        '        wait_for_port "$WATCH_VNC_PORT"' \
+        '    fi' \
+        '    if ! port_listening "$CONTROL_VNC_PORT"; then' \
+        '        x11vnc -display "$DISPLAY_ID" -shared -forever -nopw \' \
+        '            -localhost -rfbport "$CONTROL_VNC_PORT" -desktop firna-control \' \
+        '            -o "$LOG_DIR/x11vnc-control.log" -bg >/dev/null 2>&1 || true' \
+        '        wait_for_port "$CONTROL_VNC_PORT"' \
+        '    fi' \
+        '    if ! port_listening "$WATCH_BRIDGE_PORT"; then' \
+        '        nohup websockify 127.0.0.1:"$WATCH_BRIDGE_PORT" \' \
+        '            127.0.0.1:"$WATCH_VNC_PORT" >"$LOG_DIR/websockify-watch.log" 2>&1 &' \
+        '    fi' \
+        '    if ! port_listening "$CONTROL_BRIDGE_PORT"; then' \
+        '        nohup websockify 127.0.0.1:"$CONTROL_BRIDGE_PORT" \' \
+        '            127.0.0.1:"$CONTROL_VNC_PORT" >"$LOG_DIR/websockify-control.log" 2>&1 &' \
+        '    fi' \
+        '    wait_for_port "$WATCH_BRIDGE_PORT"' \
+        '    wait_for_port "$CONTROL_BRIDGE_PORT"' \
+        '    exit 0' \
+        '}' \
+        '' \
+        'case "${1:-}" in' \
+        'ensure)' \
+        '    ensure' \
+        '    ;;' \
+        '*)' \
+        '    echo "usage: firna-screen ensure" >&2' \
+        '    exit 2' \
+        '    ;;' \
+        'esac' \
+        > /usr/local/bin/firna-screen \
+    && chmod 0755 /usr/local/bin/firna-screen
