@@ -38,8 +38,8 @@ RUN apt-get update \
     && rm /tmp/google-cloud-apt-key.gpg /tmp/google-cloud-apt-key.sha256 \
     && rm -rf /var/lib/apt/lists/*
 
-ENV CHROME_VERSION=151.0.7922.137-1
-ENV CHROME_SHA256=e6dabf044cf9cd0279cfe86efa431682c18bfc06d06339ce055aaa87ae871727
+ENV CHROME_VERSION=152.0.7977.64-1
+ENV CHROME_SHA256=4eae0736a812d9bc851cd2937f7af00e47dbaf8305845eed452703ff009873c7
 
 RUN curl --fail --silent --show-error --location --retry 5 \
         https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
@@ -52,8 +52,8 @@ RUN curl --fail --silent --show-error --location --retry 5 \
     && rm -f /tmp/chrome.deb /tmp/chrome.sha256 \
     && rm -rf /var/lib/apt/lists/*
 
-ENV BOWSER_VERSION=0.2.0
-ENV BOWSER_SHA256=92458946103fe16e16e1a8eb07398b6d21903d66286776a90c151e5c9823c7d9
+ENV BOWSER_VERSION=0.3.0
+ENV BOWSER_SHA256=3237484c0edfb3b230f264b43fa7b034a221cb2bd1c03f07e6e40e278d513070
 
 RUN curl --fail --silent --show-error --location --retry 5 \
         "https://github.com/futex-ai/bowser/releases/download/v${BOWSER_VERSION}/bowser-${BOWSER_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \

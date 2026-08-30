@@ -143,6 +143,16 @@ for dir in "$envs_root"/*/; do
         report_error "${dockerfile#"${repo_root}/"}: BOWSER_SHA256 must match the manifest"
       fi
     fi
+    if [[ -f "$verify_script" ]]; then
+      if ! grep -Fq 'bowser --json-envelope capabilities' "$verify_script"; then
+        report_error "${verify_script#"${repo_root}/"} must verify Bowser capabilities"
+      fi
+      for required_feature in history kiosk_launch live_inventory; do
+        if ! grep -Fq "\"${required_feature}\"" "$verify_script"; then
+          report_error "${verify_script#"${repo_root}/"} must verify Bowser feature ${required_feature}"
+        fi
+      done
+    fi
   fi
 
   if yq -e '.chrome != null' "$manifest" >/dev/null 2>&1; then
