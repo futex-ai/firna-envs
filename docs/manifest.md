@@ -22,7 +22,7 @@ Browser environments also pin the bundled Bowser release:
 
 ```yaml
 name: browser
-version: 2
+version: 5
 description: Browser automation base environment with durable-drive mount support
 resources:
   cpu: 2
@@ -31,10 +31,10 @@ gcsfuse:
   version: 3.11.2
   repository_key_sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 chrome:
-  version: 151.0.7922.71-1
+  version: 152.0.7977.64-1
   sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 bowser:
-  version: 0.2.0
+  version: 0.3.0
   sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 

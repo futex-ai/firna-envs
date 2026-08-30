@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly expected_bowser_version='0.2.0'
-readonly expected_chrome_version='151.0.7922.137'
+readonly expected_bowser_version='0.3.0'
+readonly expected_chrome_version='152.0.7977.64'
 readonly expected_gcsfuse_version='3.11.2'
 
 command -v bowser >/dev/null
@@ -18,10 +18,28 @@ command -v x11vnc >/dev/null
 command -v xdpyinfo >/dev/null
 bowser_help="$(bowser --help)"
 [[ "$bowser_help" == *'Render web pages into compact YAML'* ]]
+bowser_capabilities="$(bowser --json-envelope capabilities)"
+python3 - "$expected_bowser_version" "$bowser_capabilities" <<'PY'
+import json
+import sys
+
+expected_version, raw_capabilities = sys.argv[1:]
+payload = json.loads(raw_capabilities)
+assert payload.get("envelope") == 1
+assert payload.get("ok") is True
+result = payload.get("result")
+assert isinstance(result, dict)
+assert result.get("version") == expected_version
+features = result.get("features")
+assert isinstance(features, dict)
+for required in ("history", "kiosk_launch", "live_inventory"):
+    assert features.get(required) is True
+PY
 
 chrome_version="$(google-chrome-stable --version | sed 's/[[:space:]]*$//')"
 [[ "$chrome_version" == "Google Chrome ${expected_chrome_version}" ]]
 printf 'bowser %s\n' "$expected_bowser_version"
+printf '%s\n' 'OK bowser native-chrome capabilities'
 printf '%s\n' "$chrome_version"
 printf 'Xvfb %s\n' "$(command -v Xvfb)"
 gcsfuse_version="$(gcsfuse --version)"
