@@ -96,6 +96,8 @@ RUN mkdir -p /etc/firna-screen \
         'CONTROL_VNC_PID_FILE="${LOG_DIR}/x11vnc-control.pid"' \
         'WATCH_BRIDGE_PID_FILE="${LOG_DIR}/websockify-watch.pid"' \
         'CONTROL_BRIDGE_PID_FILE="${LOG_DIR}/websockify-control.pid"' \
+        'WATCH_VNC_REMOTE="X11VNC_REMOTE_FIRNA_WATCH"' \
+        'CONTROL_VNC_REMOTE="X11VNC_REMOTE_FIRNA_CONTROL"' \
         'READY_TIMEOUT_SECONDS=30' \
         'RESIZE_ATTEMPTS=150' \
         'MIN_WIDTH=320' \
@@ -156,6 +158,32 @@ RUN mkdir -p /etc/firna-screen \
         '    done' \
         '}' \
         '' \
+        'vnc_dimensions() {' \
+        '    DISPLAY="$DISPLAY_ID" X11VNC_REMOTE="$1" x11vnc -Q dpy_x,dpy_y 2>/dev/null | sed -n "s/.*dpy_x:\([0-9][0-9]*\).*dpy_y:\([0-9][0-9]*\).*/\1x\2/p"' \
+        '}' \
+        '' \
+        'wait_for_vnc_geometry() {' \
+        '    remote="$1"' \
+        '    target="$2"' \
+        '    waited=0' \
+        '    while [ "$(vnc_dimensions "$remote")" != "$target" ]; do' \
+        '        if [ "$waited" -ge "$RESIZE_ATTEMPTS" ]; then' \
+        '            echo "firna-screen: VNC did not apply requested geometry" >&2' \
+        '            exit 1' \
+        '        fi' \
+        '        sleep 0.1' \
+        '        waited=$((waited + 1))' \
+        '    done' \
+        '}' \
+        '' \
+        'refresh_vnc_geometry() {' \
+        '    target="$1"' \
+        '    DISPLAY="$DISPLAY_ID" X11VNC_REMOTE="$WATCH_VNC_REMOTE" x11vnc -R reset >/dev/null 2>&1' \
+        '    wait_for_vnc_geometry "$WATCH_VNC_REMOTE" "$target"' \
+        '    DISPLAY="$DISPLAY_ID" X11VNC_REMOTE="$CONTROL_VNC_REMOTE" x11vnc -R reset >/dev/null 2>&1' \
+        '    wait_for_vnc_geometry "$CONTROL_VNC_REMOTE" "$target"' \
+        '}' \
+        '' \
         'ensure_locked() {' \
         '    mkdir -p "$LOG_DIR"' \
         '    chmod 0700 "$LOG_DIR"' \
@@ -175,7 +203,8 @@ RUN mkdir -p /etc/firna-screen \
         '    fi' \
         '    if ! port_listening "$WATCH_VNC_PORT"; then' \
         '        unlink "$WATCH_VNC_PID_FILE" >/dev/null 2>&1 || true' \
-        '        nohup x11vnc -display "$DISPLAY_ID" -viewonly -shared -forever -nopw \' \
+        '        X11VNC_REMOTE="$WATCH_VNC_REMOTE" nohup x11vnc \' \
+        '            -display "$DISPLAY_ID" -viewonly -shared -forever -nopw \' \
         '            -xrandr resize -localhost -rfbport "$WATCH_VNC_PORT" \' \
         '            -desktop firna-watch -o "$LOG_DIR/x11vnc-watch.log" \' \
         '            >/dev/null 2>&1 9>&- &' \
@@ -184,7 +213,8 @@ RUN mkdir -p /etc/firna-screen \
         '    fi' \
         '    if ! port_listening "$CONTROL_VNC_PORT"; then' \
         '        unlink "$CONTROL_VNC_PID_FILE" >/dev/null 2>&1 || true' \
-        '        nohup x11vnc -display "$DISPLAY_ID" -shared -forever -nopw \' \
+        '        X11VNC_REMOTE="$CONTROL_VNC_REMOTE" nohup x11vnc \' \
+        '            -display "$DISPLAY_ID" -shared -forever -nopw \' \
         '            -xrandr resize \' \
         '            -localhost -rfbport "$CONTROL_VNC_PORT" -desktop firna-control \' \
         '            -o "$LOG_DIR/x11vnc-control.log" >/dev/null 2>&1 9>&- &' \
@@ -237,6 +267,7 @@ RUN mkdir -p /etc/firna-screen \
         '    ensure_locked' \
         '    target="${width}x${height}"' \
         '    if [ "$(display_dimensions)" = "$target" ]; then' \
+        '        refresh_vnc_geometry "$target"' \
         '        printf '\''{"version":1,"width":%s,"height":%s}\n'\'' "$width" "$height"' \
         '        return' \
         '    fi' \
@@ -256,6 +287,7 @@ RUN mkdir -p /etc/firna-screen \
         '    DISPLAY="$DISPLAY_ID" xrandr --addmode "$DISPLAY_OUTPUT" "$mode"' \
         '    DISPLAY="$DISPLAY_ID" xrandr --output "$DISPLAY_OUTPUT" --mode "$mode"' \
         '    wait_for_geometry "$target"' \
+        '    refresh_vnc_geometry "$target"' \
         '' \
         '    previous=""' \
         '    if [ -f "$MODE_STATE_FILE" ]; then' \
