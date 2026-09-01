@@ -9,6 +9,9 @@ from pathlib import Path
 
 from e2b import CommandExitException, Sandbox
 
+SANDBOX_LIFETIME_SECONDS = 900
+VERIFY_TIMEOUT_SECONDS = 840
+
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse the template name and local script path."""
@@ -27,13 +30,13 @@ def emit_output(stdout: str, stderr: str) -> None:
 def run_script(template: str, script_path: Path) -> int:
     """Run one local script in a newly created sandbox and return its exit code."""
     script = script_path.read_text(encoding="utf-8")
-    sandbox = Sandbox.create(template, timeout=300)
+    sandbox = Sandbox.create(template, timeout=SANDBOX_LIFETIME_SECONDS)
     try:
         sandbox.files.write("/tmp/firna-env-verify.sh", script)
         try:
             result = sandbox.commands.run(
                 "bash /tmp/firna-env-verify.sh",
-                timeout=240,
+                timeout=VERIFY_TIMEOUT_SECONDS,
             )
         except CommandExitException as error:
             emit_output(error.stdout, error.stderr)
