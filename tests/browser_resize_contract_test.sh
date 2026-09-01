@@ -15,7 +15,7 @@ if grep -Fq -- '-screen 0 1280x800x24' "$dockerfile"; then
   exit 1
 fi
 
-grep -Fxq 'version: 8' "$manifest"
+grep -Fxq 'version: 9' "$manifest"
 grep -Fq 'tigervnc-standalone-server' "$dockerfile"
 grep -Fq 'capabilities)' "$dockerfile"
 grep -Fq 'resize)' "$dockerfile"
@@ -23,6 +23,12 @@ grep -Eq 'XVNC_PID_FILE=.*xvnc[.]pid' "$dockerfile"
 grep -Eq 'WATCH_VNC_PID_FILE=.*x11vnc-watch[.]pid' "$dockerfile"
 grep -Eq 'CONTROL_VNC_PID_FILE=.*x11vnc-control[.]pid' "$dockerfile"
 [[ "$(grep -Fc -- '-xrandr resize' "$dockerfile")" == '2' ]]
+[[ "$(grep -Fc 'nohup x11vnc' "$dockerfile")" == '2' ]]
+if grep -Fq -- "-bg >/dev/null" "$dockerfile"; then
+  printf '%s\n' 'x11vnc still self-daemonizes before PID capture' >&2
+  exit 1
+fi
+[[ "$(grep -Fc '9>&- &' "$dockerfile")" == '6' ]]
 
 helper="${test_root}/firna-screen"
 python3 - "$dockerfile" "$helper" <<'PY'
