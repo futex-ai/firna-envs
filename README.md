@@ -28,7 +28,7 @@ implementation work is indexed in [plans/README.md](./plans/README.md).
 | Environment | Template | Purpose |
 | --- | --- | --- |
 | `general` | `firna-general-v3` | Debian-based command-line and build tools for everyday repository work |
-| `browser` | `firna-browser-v11` | Google Chrome, a dynamically resizable screen stack, and the checksum-pinned Bowser CLI for browser automation |
+| `browser` | `firna-browser-v15` | Google Chrome, a dynamically resizable screen stack, and the checksum-pinned Bowser CLI for browser automation |
 
 The browser definition pins an exact versioned Chrome amd64 Debian-package URL
 and the Bowser x86_64 Linux release archive by version and SHA-256. Its bundled
@@ -96,6 +96,19 @@ E2B_API_KEY=... .venv/bin/python scripts/run_in_sandbox.py \
 
 The build helper derives the template name and resources from the manifest and
 refuses to rebuild a name already present in the selected E2B team.
+
+To build and exercise the browser definition without publishing it, run the
+same verification as an unprivileged user so Chrome retains its sandbox, as it
+does in E2B:
+
+```bash
+docker build --network=host --tag firna-browser-local \
+  --file envs/browser/Dockerfile .
+docker run --rm --network=none --privileged --user 1000:1000 \
+  --env HOME=/tmp --shm-size=1g \
+  --volume "$PWD/envs/browser/verify.sh:/tmp/firna-env-verify.sh:ro" \
+  firna-browser-local bash /tmp/firna-env-verify.sh
+```
 
 ## Release and audit
 

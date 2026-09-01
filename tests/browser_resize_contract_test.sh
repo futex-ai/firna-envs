@@ -15,7 +15,7 @@ if grep -Fq -- '-screen 0 1280x800x24' "$dockerfile"; then
   exit 1
 fi
 
-grep -Fxq 'version: 11' "$manifest"
+grep -Fxq 'version: 15' "$manifest"
 grep -Fq "        iproute2 \\" "$dockerfile"
 grep -Fq 'tigervnc-standalone-server' "$dockerfile"
 grep -Fq 'capabilities)' "$dockerfile"
@@ -26,8 +26,28 @@ grep -Eq 'CONTROL_VNC_PID_FILE=.*x11vnc-control[.]pid' "$dockerfile"
 grep -Fq 'WATCH_VNC_REMOTE="X11VNC_REMOTE_FIRNA_WATCH"' "$dockerfile"
 grep -Fq 'CONTROL_VNC_REMOTE="X11VNC_REMOTE_FIRNA_CONTROL"' "$dockerfile"
 grep -Fq 'wait_for_vnc_geometry' "$dockerfile"
+grep -Fq \
+  "wait_for_vnc_geometry \"\$WATCH_VNC_REMOTE\" \"\$WATCH_VNC_PID_FILE\" \"\$WATCH_VNC_PORT\" \"\$target\"" \
+  "$dockerfile"
+grep -Fq \
+  "wait_for_vnc_geometry \"\$CONTROL_VNC_REMOTE\" \"\$CONTROL_VNC_PID_FILE\" \"\$CONTROL_VNC_PORT\" \"\$target\"" \
+  "$dockerfile"
+if grep -Fq 'x11vnc -R reset' "$dockerfile"; then
+  printf '%s\n' 'resize still uses the crash-prone x11vnc remote reset' >&2
+  exit 1
+fi
 [[ "$(grep -Fc -- '-xrandr resize' "$dockerfile")" == '2' ]]
 [[ "$(grep -Fc 'nohup x11vnc' "$dockerfile")" == '2' ]]
+if [[ "$(grep -Fc -- '-noshm' "$dockerfile")" != '2' ]]; then
+  printf '%s\n' 'both x11vnc bridges must avoid unavailable MIT-SHM polling' >&2
+  exit 1
+fi
+grep -Fq "process_listening \"\$WATCH_VNC_PID_FILE\" \"\$WATCH_VNC_PORT\"" "$dockerfile"
+grep -Fq "process_listening \"\$CONTROL_VNC_PID_FILE\" \"\$CONTROL_VNC_PORT\"" "$dockerfile"
+if grep -Fq "if ! port_listening \"\$CONTROL_VNC_PORT\"" "$dockerfile"; then
+  printf '%s\n' 'a platform forwarding listener can still mask a dead control bridge' >&2
+  exit 1
+fi
 if grep -Fq -- "-bg >/dev/null" "$dockerfile"; then
   printf '%s\n' 'x11vnc still self-daemonizes before PID capture' >&2
   exit 1
@@ -108,15 +128,16 @@ done
 grep -Fq 'browser-screen-capabilities' "$verify_script"
 grep -Fq 'browser-vnc-framebuffer' "$verify_script"
 grep -Fq 'browser-responsive-reflow' "$verify_script"
+grep -Fq 'subprocess.Popen' "$verify_script"
 grep -Fq 'assert_owned_process' "$verify_script"
 grep -Fq 'owned_process_loopback_listening' "$verify_script"
 grep -Fq 'browser screen-stack diagnostics' "$verify_script"
-grep -Fq 'subprocess.Popen(' "$verify_script"
 if grep -Fq 'subprocess.run(' "$verify_script"; then
   printf '%s\n' 'VNC resize probe blocks while the framebuffer is unread' >&2
   exit 1
 fi
 if grep -Fq '"outer_width": str(width)' "$verify_script"; then
-  printf '%s\n' 'responsive smoke treats Chrome outer-window minimums as viewport drift' >&2
+  printf '%s\n' 'browser smoke still requires Chrome window chrome to match the content viewport' >&2
   exit 1
 fi
+grep -Fq 'outer_width < width or outer_height < height' "$verify_script"

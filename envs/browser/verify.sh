@@ -80,6 +80,11 @@ screen_failure_diagnostics() {
     printf '==> %s <==\n' "$log" >&2
     tail -40 "$log" >&2 || true
   done
+  for log in "${site_root}/server.log" "${site_root}/bowser-open.err"; do
+    [[ -s "$log" ]] || continue
+    printf '==> %s <==\n' "$log" >&2
+    tail -80 "$log" >&2 || true
+  done
 }
 
 finish() {
@@ -150,40 +155,34 @@ def observe_resize(port: int, initial: tuple[int, int], target: tuple[int, int])
     if (width, height) != initial:
         raise RuntimeError(f"initial VNC framebuffer {(width, height)} != {initial}")
     sock.sendall(struct.pack("!BBHii", 2, 0, 2, -223, 0))
-    sock.sendall(struct.pack("!BBHHHH", 3, 1, 0, 0, width, height))
     process = subprocess.Popen(
         ["firna-screen", "resize", str(target[0]), str(target[1])],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
-    deadline = time.monotonic() + 30
     resized = False
-    stdout = ""
-    stderr = ""
-    sock.settimeout(1)
     try:
+        sock.sendall(struct.pack("!BBHHHH", 3, 1, 0, 0, width, height))
+        deadline = time.monotonic() + 20
         while time.monotonic() < deadline and not resized:
-            try:
-                message_type = receive(sock, 1)[0]
-            except TimeoutError:
-                sock.sendall(
-                    struct.pack("!BBHHHH", 3, 1, 0, 0, target[0], target[1])
-                )
-                continue
+            message_type = receive(sock, 1)[0]
             if message_type == 0:
                 _, rectangle_count = struct.unpack("!BH", receive(sock, 3))
                 for _ in range(rectangle_count):
                     _, _, rect_width, rect_height, encoding = struct.unpack(
                         "!HHHHi", receive(sock, 12)
                     )
-                    if encoding == -223 and (rect_width, rect_height) == target:
-                        resized = True
+                    if encoding == -223:
+                        width, height = rect_width, rect_height
+                        resized = (width, height) == target
                     elif encoding == 0:
                         receive(sock, rect_width * rect_height * bytes_per_pixel)
+                    else:
+                        raise RuntimeError(f"unexpected VNC encoding: {encoding}")
                 if not resized:
                     sock.sendall(
-                        struct.pack("!BBHHHH", 3, 1, 0, 0, target[0], target[1])
+                        struct.pack("!BBHHHH", 3, 1, 0, 0, width, height)
                     )
             elif message_type == 2:
                 continue
@@ -194,24 +193,18 @@ def observe_resize(port: int, initial: tuple[int, int], target: tuple[int, int])
                 raise RuntimeError(f"unexpected VNC message type: {message_type}")
         if not resized:
             raise RuntimeError(f"VNC resize notification not received for {target}")
-        stdout, stderr = process.communicate(
-            timeout=max(1, deadline - time.monotonic())
-        )
+        stdout, stderr = process.communicate(timeout=20)
         if process.returncode != 0:
-            raise RuntimeError(f"firna-screen resize failed: {stderr.strip()}")
+            raise RuntimeError(f"resize command failed: {stderr.strip()}")
+        acknowledgment = json.loads(stdout)
+        if (acknowledgment.get("width"), acknowledgment.get("height")) != target:
+            raise RuntimeError(f"wrong resize acknowledgment: {acknowledgment!r}")
+        check(port, target)
     finally:
         sock.close()
         if process.poll() is None:
-            process.terminate()
-            try:
-                process.communicate(timeout=2)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.communicate()
-    acknowledgment = json.loads(stdout)
-    if (acknowledgment.get("width"), acknowledgment.get("height")) != target:
-        raise RuntimeError(f"wrong resize acknowledgment: {acknowledgment!r}")
-    check(port, target)
+            process.kill()
+            process.wait()
 
 
 mode = sys.argv[1]
@@ -563,18 +556,18 @@ while time.monotonic() < deadline:
         continue
     if all(last.get(key) == value for key, value in expected.items()):
         try:
-            outer_contains_viewport = (
-                int(last["outer_width"]) >= width
-                and int(last["outer_height"]) >= height
-            )
+            outer_width = int(last["outer_width"])
+            outer_height = int(last["outer_height"])
         except (KeyError, TypeError, ValueError):
-            outer_contains_viewport = False
-        if outer_contains_viewport:
+            time.sleep(0.1)
+            continue
+        if not (outer_width < width or outer_height < height):
             break
     time.sleep(0.1)
 else:
     raise RuntimeError(
-        f"browser metrics {last!r} did not match viewport {expected!r}"
+        f"browser metrics {last!r} did not expose exact content metrics "
+        f"{expected!r} with outer dimensions at least as large as the viewport"
     )
 PY
 }
