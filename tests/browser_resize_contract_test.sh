@@ -15,7 +15,7 @@ if grep -Fq -- '-screen 0 1280x800x24' "$dockerfile"; then
   exit 1
 fi
 
-grep -Fxq 'version: 10' "$manifest"
+grep -Fxq 'version: 11' "$manifest"
 grep -Fq 'tigervnc-standalone-server' "$dockerfile"
 grep -Fq 'capabilities)' "$dockerfile"
 grep -Fq 'resize)' "$dockerfile"
@@ -107,6 +107,7 @@ done
 grep -Fq 'browser-screen-capabilities' "$verify_script"
 grep -Fq 'browser-vnc-framebuffer' "$verify_script"
 grep -Fq 'browser-responsive-reflow' "$verify_script"
+grep -Fq 'subprocess.Popen' "$verify_script"
 grep -Fq 'assert_owned_process' "$verify_script"
 grep -Fq 'owned_process_loopback_listening' "$verify_script"
 grep -Fq 'browser screen-stack diagnostics' "$verify_script"
