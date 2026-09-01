@@ -1,12 +1,13 @@
 # Browser environment inventory
 
-`firna-browser-v9` evolves the v5 native-Chrome environment without changing
-its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6–v8
+`firna-browser-v10` evolves the v5 native-Chrome environment without changing
+its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6–v9
 candidates were not adopted. Their release diagnostics successively exposed
 ambiguous global process discovery, E2B platform-owned forwarding listeners,
-and x11vnc recording its pre-daemonization parent PID. V9 runs x11vnc under
-`nohup` without self-daemonizing, so every PID file identifies the live process
-that Firna launched.
+x11vnc recording its pre-daemonization parent PID, and asynchronous RandR
+propagation. V10 gives the two VNC servers distinct control channels, triggers
+their framebuffer rebuilds, and waits for both exact geometries before
+acknowledging a resize.
 
 ## Display stack
 
@@ -18,7 +19,7 @@ that Firna launched.
   control targets. Both monitor RandR changes; only the watch target carries
   `-viewonly`.
 - Websockify retains ports 6080 and 6081 for Firna's authenticated outer
-  router. No new Firna-owned network listener is part of v9.
+  router. No new Firna-owned network listener is part of v10.
 
 ## Screen helper
 

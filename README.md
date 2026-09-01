@@ -28,7 +28,7 @@ implementation work is indexed in [plans/README.md](./plans/README.md).
 | Environment | Template | Purpose |
 | --- | --- | --- |
 | `general` | `firna-general-v3` | Debian-based command-line and build tools for everyday repository work |
-| `browser` | `firna-browser-v9` | Google Chrome, a dynamically resizable screen stack, and the checksum-pinned Bowser CLI for browser automation |
+| `browser` | `firna-browser-v10` | Google Chrome, a dynamically resizable screen stack, and the checksum-pinned Bowser CLI for browser automation |
 
 The browser definition pins both the Chrome amd64 Debian package and the
 Bowser x86_64 Linux release archive by version and SHA-256. Its release smoke
@@ -45,6 +45,9 @@ bridges retain their existing permission split and announce RandR changes to
 connected viewers. The helper records the exact PIDs it owns so release smokes
 and runtime diagnostics validate those processes without ambiguous global
 process matching.
+Resize acknowledgments are emitted only after both VNC servers report the new
+framebuffer geometry, so callers do not need to guess at RandR propagation
+timing.
 
 ## Template identity and provenance
 
