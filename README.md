@@ -28,7 +28,7 @@ implementation work is indexed in [plans/README.md](./plans/README.md).
 | Environment | Template | Purpose |
 | --- | --- | --- |
 | `general` | `firna-general-v3` | Debian-based command-line and build tools for everyday repository work |
-| `browser` | `firna-browser-v11` | Google Chrome, a dynamically resizable screen stack, and the checksum-pinned Bowser CLI for browser automation |
+| `browser` | `firna-browser-v12` | Google Chrome, a dynamically resizable screen stack, and the checksum-pinned Bowser CLI for browser automation |
 
 The browser definition pins both the Chrome amd64 Debian package and the
 Bowser x86_64 Linux release archive by version and SHA-256. Its release smoke

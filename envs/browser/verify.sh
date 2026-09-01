@@ -472,8 +472,6 @@ expected = {
     "screen_height": str(height),
     "inner_width": str(width),
     "inner_height": str(height),
-    "outer_width": str(width),
-    "outer_height": str(height),
     "breakpoint": expected_breakpoint,
 }
 deadline = time.monotonic() + 15
@@ -485,11 +483,21 @@ while time.monotonic() < deadline:
     except Exception:
         time.sleep(0.1)
         continue
-    if last == expected:
-        break
+    if all(last.get(key) == value for key, value in expected.items()):
+        try:
+            outer_width = int(last["outer_width"])
+            outer_height = int(last["outer_height"])
+        except (KeyError, TypeError, ValueError):
+            time.sleep(0.1)
+            continue
+        if not (outer_width < width or outer_height < height):
+            break
     time.sleep(0.1)
 else:
-    raise RuntimeError(f"browser metrics {last!r} did not become {expected!r}")
+    raise RuntimeError(
+        f"browser metrics {last!r} did not expose exact content metrics "
+        f"{expected!r} with outer dimensions at least as large as the viewport"
+    )
 PY
 }
 
