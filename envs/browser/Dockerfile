@@ -91,6 +91,11 @@ RUN mkdir -p /etc/firna-screen \
         'LOCK_FILE="/tmp/firna-screen.lock"' \
         'MODE_STATE_FILE="${LOG_DIR}/mode"' \
         'XVNC_SOCKET="${LOG_DIR}/xvnc.sock"' \
+        'XVNC_PID_FILE="${LOG_DIR}/xvnc.pid"' \
+        'WATCH_VNC_PID_FILE="${LOG_DIR}/x11vnc-watch.pid"' \
+        'CONTROL_VNC_PID_FILE="${LOG_DIR}/x11vnc-control.pid"' \
+        'WATCH_BRIDGE_PID_FILE="${LOG_DIR}/websockify-watch.pid"' \
+        'CONTROL_BRIDGE_PID_FILE="${LOG_DIR}/websockify-control.pid"' \
         'READY_TIMEOUT_SECONDS=30' \
         'RESIZE_ATTEMPTS=150' \
         'MIN_WIDTH=320' \
@@ -156,10 +161,12 @@ RUN mkdir -p /etc/firna-screen \
         '    chmod 0700 "$LOG_DIR"' \
         '    if ! xdpyinfo -display "$DISPLAY_ID" >/dev/null 2>&1; then' \
         '        unlink "$XVNC_SOCKET" >/dev/null 2>&1 || true' \
+        '        unlink "$XVNC_PID_FILE" >/dev/null 2>&1 || true' \
         '        nohup Xtigervnc "$DISPLAY_ID" -ac -geometry 1280x800 -depth 24 \' \
         '            -rfbport -1 -rfbunixpath "$XVNC_SOCKET" -rfbunixmode 0600 \' \
         '            -SecurityTypes None -desktop firna-display -noreset -nolisten tcp \' \
         '            >"$LOG_DIR/xvnc.log" 2>&1 &' \
+        '        printf '\''%s\n'\'' "$!" > "$XVNC_PID_FILE"' \
         '        wait_for_display' \
         '    fi' \
         '    if ! pgrep -f "fluxbox.*firna-screen" >/dev/null 2>&1; then' \
@@ -167,25 +174,34 @@ RUN mkdir -p /etc/firna-screen \
         '            -display "$DISPLAY_ID" >"$LOG_DIR/fluxbox.log" 2>&1 &' \
         '    fi' \
         '    if ! port_listening "$WATCH_VNC_PORT"; then' \
+        '        unlink "$WATCH_VNC_PID_FILE" >/dev/null 2>&1 || true' \
         '        x11vnc -display "$DISPLAY_ID" -viewonly -shared -forever -nopw \' \
         '            -xrandr resize -localhost -rfbport "$WATCH_VNC_PORT" \' \
         '            -desktop firna-watch -o "$LOG_DIR/x11vnc-watch.log" \' \
+        '            -rmflag "create:$WATCH_VNC_PID_FILE" \' \
         '            -bg >/dev/null 2>&1 || true' \
         '        wait_for_port "$WATCH_VNC_PORT"' \
         '    fi' \
         '    if ! port_listening "$CONTROL_VNC_PORT"; then' \
+        '        unlink "$CONTROL_VNC_PID_FILE" >/dev/null 2>&1 || true' \
         '        x11vnc -display "$DISPLAY_ID" -shared -forever -nopw -xrandr resize \' \
         '            -localhost -rfbport "$CONTROL_VNC_PORT" -desktop firna-control \' \
-        '            -o "$LOG_DIR/x11vnc-control.log" -bg >/dev/null 2>&1 || true' \
+        '            -o "$LOG_DIR/x11vnc-control.log" \' \
+        '            -rmflag "create:$CONTROL_VNC_PID_FILE" \' \
+        '            -bg >/dev/null 2>&1 || true' \
         '        wait_for_port "$CONTROL_VNC_PORT"' \
         '    fi' \
         '    if ! port_listening "$WATCH_BRIDGE_PORT"; then' \
+        '        unlink "$WATCH_BRIDGE_PID_FILE" >/dev/null 2>&1 || true' \
         '        nohup websockify 127.0.0.1:"$WATCH_BRIDGE_PORT" \' \
         '            127.0.0.1:"$WATCH_VNC_PORT" >"$LOG_DIR/websockify-watch.log" 2>&1 &' \
+        '        printf '\''%s\n'\'' "$!" > "$WATCH_BRIDGE_PID_FILE"' \
         '    fi' \
         '    if ! port_listening "$CONTROL_BRIDGE_PORT"; then' \
+        '        unlink "$CONTROL_BRIDGE_PID_FILE" >/dev/null 2>&1 || true' \
         '        nohup websockify 127.0.0.1:"$CONTROL_BRIDGE_PORT" \' \
         '            127.0.0.1:"$CONTROL_VNC_PORT" >"$LOG_DIR/websockify-control.log" 2>&1 &' \
+        '        printf '\''%s\n'\'' "$!" > "$CONTROL_BRIDGE_PID_FILE"' \
         '    fi' \
         '    wait_for_port "$WATCH_BRIDGE_PORT"' \
         '    wait_for_port "$CONTROL_BRIDGE_PORT"' \

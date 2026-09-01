@@ -75,7 +75,30 @@ cleanup() {
   fi
   rm -rf "$site_root"
 }
-trap cleanup EXIT
+
+screen_failure_diagnostics() {
+  printf '%s\n' 'browser screen-stack diagnostics:' >&2
+  pgrep -af 'Xtigervnc|x11vnc|websockify|fluxbox' >&2 || true
+  ss -ltnp '( sport = :5900 or sport = :5901 or sport = :6080 or sport = :6081 )' \
+    >&2 || true
+  local log
+  for log in /tmp/firna-screen/*.log; do
+    [[ -f "$log" ]] || continue
+    printf '==> %s <==\n' "$log" >&2
+    tail -40 "$log" >&2 || true
+  done
+}
+
+finish() {
+  local status="$?"
+  trap - EXIT
+  if [[ "$status" -ne 0 ]]; then
+    screen_failure_diagnostics
+  fi
+  cleanup
+  exit "$status"
+}
+trap finish EXIT
 
 cat >"${site_root}/vnc_probe.py" <<'PY'
 import json
@@ -195,6 +218,32 @@ loopback_listening() {
   done <<<"$addresses"
 }
 
+assert_owned_process() {
+  local label="$1"
+  local pid_file="$2"
+  shift 2
+  [[ -s "$pid_file" ]] || {
+    printf '%s process did not record a PID\n' "$label" >&2
+    return 1
+  }
+  local pid
+  IFS= read -r pid <"$pid_file"
+  [[ "$pid" =~ ^[1-9][0-9]*$ && -r "/proc/${pid}/cmdline" ]] || {
+    printf '%s process PID is not live: %s\n' "$label" "$pid" >&2
+    return 1
+  }
+  local command_line
+  command_line="$(tr '\0' ' ' <"/proc/${pid}/cmdline")"
+  local expected
+  for expected in "$@"; do
+    [[ "$command_line" == *"$expected"* ]] || {
+      printf '%s process is missing expected argument: %s\n' \
+        "$label" "$expected" >&2
+      return 1
+    }
+  done
+}
+
 assert_resize_ack() {
   local width="$1"
   local height="$2"
@@ -216,21 +265,28 @@ PY
 }
 
 firna-screen ensure
-pgrep -af Xtigervnc | grep -F -- '-rfbport -1' | grep -Fq -- '-rfbunixmode 0600'
+assert_owned_process display /tmp/firna-screen/xvnc.pid \
+  Xtigervnc '-rfbport -1' '-rfbunixmode 0600'
 [[ -S /tmp/firna-screen/xvnc.sock ]]
 [[ "$(stat -c '%a' /tmp/firna-screen/xvnc.sock)" == '600' ]]
 loopback_listening 5900
 loopback_listening 5901
 loopback_listening 6080
 loopback_listening 6081
-pgrep -af x11vnc | grep -F -- '-viewonly' | grep -Fq 'firna-watch'
-[[ "$(pgrep -cf 'x11vnc.*firna-watch')" == '1' ]]
-[[ "$(pgrep -cf 'x11vnc.*firna-control')" == '1' ]]
+assert_owned_process watch-vnc /tmp/firna-screen/x11vnc-watch.pid \
+  x11vnc -viewonly firna-watch
+assert_owned_process control-vnc /tmp/firna-screen/x11vnc-control.pid \
+  x11vnc firna-control
+assert_owned_process watch-bridge /tmp/firna-screen/websockify-watch.pid \
+  websockify 6080 5900
+assert_owned_process control-bridge /tmp/firna-screen/websockify-control.pid \
+  websockify 6081 5901
+printf '%s\n' 'OK browser-screen-stack-security'
 
-watch_pid="$(pgrep -f 'x11vnc.*firna-watch')"
-control_pid="$(pgrep -f 'x11vnc.*firna-control')"
-watch_bridge_pid="$(pgrep -f 'websockify.*6080')"
-control_bridge_pid="$(pgrep -f 'websockify.*6081')"
+watch_pid="$(</tmp/firna-screen/x11vnc-watch.pid)"
+control_pid="$(</tmp/firna-screen/x11vnc-control.pid)"
+watch_bridge_pid="$(</tmp/firna-screen/websockify-watch.pid)"
+control_bridge_pid="$(</tmp/firna-screen/websockify-control.pid)"
 
 valid_contract_sizes=('320 240' '321 241' '3839 2159' '3840 2160')
 for size in "${valid_contract_sizes[@]}"; do
@@ -266,12 +322,13 @@ done
 
 python3 "${site_root}/vnc_probe.py" resize 5900 1280x800 390x700
 python3 "${site_root}/vnc_probe.py" resize 5901 390x700 1280x800
-[[ "$(pgrep -f 'x11vnc.*firna-watch')" == "$watch_pid" ]]
-[[ "$(pgrep -f 'x11vnc.*firna-control')" == "$control_pid" ]]
-[[ "$(pgrep -f 'websockify.*6080')" == "$watch_bridge_pid" ]]
-[[ "$(pgrep -f 'websockify.*6081')" == "$control_bridge_pid" ]]
+[[ "$(</tmp/firna-screen/x11vnc-watch.pid)" == "$watch_pid" ]]
+[[ "$(</tmp/firna-screen/x11vnc-control.pid)" == "$control_pid" ]]
+[[ "$(</tmp/firna-screen/websockify-watch.pid)" == "$watch_bridge_pid" ]]
+[[ "$(</tmp/firna-screen/websockify-control.pid)" == "$control_bridge_pid" ]]
 firna-screen ensure
-[[ "$(pgrep -cf 'x11vnc.*firna-watch')" == '1' ]]
+assert_owned_process watch-vnc /tmp/firna-screen/x11vnc-watch.pid \
+  x11vnc -viewonly firna-watch
 printf '%s\n' 'OK browser-vnc-framebuffer'
 
 cat >"${site_root}/server.py" <<'PY'

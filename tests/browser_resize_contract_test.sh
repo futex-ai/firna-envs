@@ -15,10 +15,13 @@ if grep -Fq -- '-screen 0 1280x800x24' "$dockerfile"; then
   exit 1
 fi
 
-grep -Fxq 'version: 6' "$manifest"
+grep -Fxq 'version: 7' "$manifest"
 grep -Fq 'tigervnc-standalone-server' "$dockerfile"
 grep -Fq 'capabilities)' "$dockerfile"
 grep -Fq 'resize)' "$dockerfile"
+grep -Eq 'XVNC_PID_FILE=.*xvnc[.]pid' "$dockerfile"
+grep -Eq 'WATCH_VNC_PID_FILE=.*x11vnc-watch[.]pid' "$dockerfile"
+grep -Eq 'CONTROL_VNC_PID_FILE=.*x11vnc-control[.]pid' "$dockerfile"
 [[ "$(grep -Fc -- '-xrandr resize' "$dockerfile")" == '2' ]]
 
 helper="${test_root}/firna-screen"
@@ -95,3 +98,5 @@ done
 grep -Fq 'browser-screen-capabilities' "$verify_script"
 grep -Fq 'browser-vnc-framebuffer' "$verify_script"
 grep -Fq 'browser-responsive-reflow' "$verify_script"
+grep -Fq 'assert_owned_process' "$verify_script"
+grep -Fq 'browser screen-stack diagnostics' "$verify_script"
