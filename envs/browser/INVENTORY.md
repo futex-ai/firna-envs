@@ -1,13 +1,15 @@
 # Browser environment inventory
 
-`firna-browser-v11` evolves the v5 native-Chrome environment without changing
-its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6–v10
+`firna-browser-v12` evolves the v5 native-Chrome environment without changing
+its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6–v11
 candidates were not adopted. Their release diagnostics successively exposed
 ambiguous global process discovery, E2B platform-owned forwarding listeners,
-x11vnc recording its pre-daemonization parent PID, and asynchronous RandR
-propagation. V11 retains the v10 runtime contract and corrects its persistent
-VNC smoke client so it continues consuming resize notifications while the
-helper waits for stream readiness, matching a real connected viewer.
+x11vnc recording its pre-daemonization parent PID, asynchronous RandR
+propagation, and a persistent-client smoke deadlock. V11 proved the complete
+runtime and VNC resize path but incorrectly required Chrome's outer window
+chrome to equal the content viewport. V12 asserts the actual contract: exact
+screen and inner-viewport metrics, while allowing outer dimensions to remain
+larger where Chrome enforces a minimum window size.
 
 ## Display stack
 
@@ -19,7 +21,7 @@ helper waits for stream readiness, matching a real connected viewer.
   control targets. Both monitor RandR changes; only the watch target carries
   `-viewonly`.
 - Websockify retains ports 6080 and 6081 for Firna's authenticated outer
-  router. No new Firna-owned network listener is part of v11.
+  router. No new Firna-owned network listener is part of v12.
 
 ## Screen helper
 

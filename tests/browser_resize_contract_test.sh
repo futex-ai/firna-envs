@@ -15,7 +15,7 @@ if grep -Fq -- '-screen 0 1280x800x24' "$dockerfile"; then
   exit 1
 fi
 
-grep -Fxq 'version: 11' "$manifest"
+grep -Fxq 'version: 12' "$manifest"
 grep -Fq 'tigervnc-standalone-server' "$dockerfile"
 grep -Fq 'capabilities)' "$dockerfile"
 grep -Fq 'resize)' "$dockerfile"
@@ -111,3 +111,8 @@ grep -Fq 'subprocess.Popen' "$verify_script"
 grep -Fq 'assert_owned_process' "$verify_script"
 grep -Fq 'owned_process_loopback_listening' "$verify_script"
 grep -Fq 'browser screen-stack diagnostics' "$verify_script"
+if grep -Fq '"outer_width": str(width)' "$verify_script"; then
+  printf '%s\n' 'browser smoke still requires Chrome window chrome to match the content viewport' >&2
+  exit 1
+fi
+grep -Fq 'outer_width < width or outer_height < height' "$verify_script"
