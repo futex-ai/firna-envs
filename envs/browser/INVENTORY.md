@@ -1,13 +1,15 @@
 # Browser environment inventory
 
-`firna-browser-v10` evolves the v5 native-Chrome environment without changing
-its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6–v9
-candidates were not adopted. Their release diagnostics successively exposed
-ambiguous global process discovery, E2B platform-owned forwarding listeners,
-x11vnc recording its pre-daemonization parent PID, and asynchronous RandR
-propagation. V10 gives the two VNC servers distinct control channels, triggers
-their framebuffer rebuilds, and waits for both exact geometries before
-acknowledging a resize.
+`firna-browser-v11` extends the v10 resizable native-Chrome environment without
+changing its Chrome, Bowser, gcsfuse, or public stream-port pins. V11 replaces
+Chrome's moving channel URL with its exact versioned package source, installs a
+machine-readable Bowser runtime contract, and exercises kiosk launch, history,
+and live inventory before release promotion. The release workflow publishes a
+unique staging alias and assigns the immutable final alias only after that exact
+template identity passes its smoke test.
+
+V10 introduced distinct control channels for the two VNC servers, explicit
+framebuffer rebuilds, and exact-geometry waits before resize acknowledgment.
 
 ## Display stack
 
@@ -19,7 +21,7 @@ acknowledging a resize.
   control targets. Both monitor RandR changes; only the watch target carries
   `-viewonly`.
 - Websockify retains ports 6080 and 6081 for Firna's authenticated outer
-  router. No new Firna-owned network listener is part of v10.
+  router. No new Firna-owned network listener is part of v11.
 
 ## Screen helper
 
@@ -29,6 +31,11 @@ Its version-1 capability envelope advertises exact sizes between 320×240 and
 creates one exact RandR mode, waits for X to report the requested geometry,
 removes the preceding generated mode, and returns a machine-readable
 acknowledgment.
+
+The release smoke requires exact display, `screen`, and page-viewport geometry.
+Chrome's `outerWidth` and `outerHeight` may retain a browser-owned minimum at
+small display sizes, so they are required to contain the viewport but are not
+the viewport-size contract.
 
 The helper records the display, VNC, and WebSocket bridge PIDs beneath its
 mode-0700 runtime directory. Verification reads those exact files and checks

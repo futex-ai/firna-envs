@@ -1,5 +1,5 @@
 name: browser
-version: 10
+version: 11
 description: Browser automation base environment with Chrome, Bowser, a dynamically resizable screen stack, and durable-drive mount support
 resources:
   cpu: 2
@@ -9,7 +9,9 @@ gcsfuse:
   repository_key_sha256: 3ecc63922b7795eb23fdc449ff9396f9114cb3cf186d6f5b53ad4cc3ebfbb11f
 chrome:
   version: 152.0.7977.64-1
+  url: https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_152.0.7977.64-1_amd64.deb
   sha256: 4eae0736a812d9bc851cd2937f7af00e47dbaf8305845eed452703ff009873c7
 bowser:
   version: 0.3.0
+  contract: contracts/browser-bowser.json
   sha256: 3237484c0edfb3b230f264b43fa7b034a221cb2bd1c03f07e6e40e278d513070

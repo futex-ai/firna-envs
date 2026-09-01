@@ -1,34 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly expected_bowser_version='0.3.0'
 readonly expected_chrome_version='152.0.7977.64'
 readonly expected_gcsfuse_version='3.11.2'
+readonly bowser_contract='/etc/firna/browser-bowser.json'
+readonly bowser_contract_verifier='/usr/local/libexec/firna-verify-bowser-contract'
 
-for command in bowser firna-screen flock fluxbox fusermount3 gcsfuse \
-  google-chrome-stable mountpoint websockify x11vnc xrandr xdpyinfo Xtigervnc; do
+for command in bowser curl firna-screen flock fluxbox fusermount3 gcsfuse \
+  google-chrome-stable mountpoint ss timeout websockify x11vnc xrandr xdpyinfo \
+  Xtigervnc; do
   command -v "$command" >/dev/null
 done
-
+[[ -x "$bowser_contract_verifier" ]]
+[[ -f "$bowser_contract" ]]
 bowser_help="$(bowser --help)"
 [[ "$bowser_help" == *'Render web pages into compact YAML'* ]]
-bowser_capabilities="$(bowser --json-envelope capabilities)"
-python3 - "$expected_bowser_version" "$bowser_capabilities" <<'PY'
-import json
-import sys
-
-expected_version, raw_capabilities = sys.argv[1:]
-payload = json.loads(raw_capabilities)
-assert payload.get("envelope") == 1
-assert payload.get("ok") is True
-result = payload.get("result")
-assert isinstance(result, dict)
-assert result.get("version") == expected_version
-features = result.get("features")
-assert isinstance(features, dict)
-for required in ("history", "kiosk_launch", "live_inventory"):
-    assert features.get(required) is True
-PY
+bowser --json-envelope capabilities \
+  | "$bowser_contract_verifier" "$bowser_contract"
 
 screen_capabilities="$(firna-screen capabilities)"
 python3 - "$screen_capabilities" <<'PY'
@@ -51,23 +39,28 @@ printf '%s\n' 'OK browser-screen-capabilities'
 
 chrome_version="$(google-chrome-stable --version | sed 's/[[:space:]]*$//')"
 [[ "$chrome_version" == "Google Chrome ${expected_chrome_version}" ]]
+printf '%s\n' 'OK Bowser runtime contract'
 gcsfuse_version="$(gcsfuse --version)"
 [[ "$gcsfuse_version" == "gcsfuse version ${expected_gcsfuse_version} "* ]]
 [[ -c /dev/fuse ]]
-printf 'bowser %s\n' "$expected_bowser_version"
-printf '%s\n' 'OK bowser native-chrome capabilities'
 printf '%s\n' "$chrome_version"
 printf 'Xtigervnc %s\n' "$(command -v Xtigervnc)"
 printf '%s\n' "$gcsfuse_version"
 printf 'FUSE device %s\n' /dev/fuse
 
 site_root="$(mktemp -d)"
+session_root="${site_root}/sessions"
 server_pid=''
 browser_session_id=''
+
+run_bowser() {
+  DISPLAY=:0 timeout --signal=TERM 60s bowser "$@"
+}
+
 cleanup() {
   if [[ -n "$browser_session_id" ]]; then
-    DISPLAY=:0 timeout 20 bowser --json-envelope --chrome-path \
-      /usr/bin/google-chrome-stable --session-dir "${site_root}/session" \
+    run_bowser --json-envelope --chrome-path /usr/bin/google-chrome-stable \
+      --session-dir "$session_root" \
       session close "$browser_session_id" >/dev/null 2>&1 || true
   fi
   if [[ -n "$server_pid" ]]; then
@@ -158,40 +151,67 @@ def observe_resize(port: int, initial: tuple[int, int], target: tuple[int, int])
         raise RuntimeError(f"initial VNC framebuffer {(width, height)} != {initial}")
     sock.sendall(struct.pack("!BBHii", 2, 0, 2, -223, 0))
     sock.sendall(struct.pack("!BBHHHH", 3, 1, 0, 0, width, height))
-    result = subprocess.run(
+    process = subprocess.Popen(
         ["firna-screen", "resize", str(target[0]), str(target[1])],
-        check=True,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=20,
     )
-    acknowledgment = json.loads(result.stdout)
+    deadline = time.monotonic() + 30
+    resized = False
+    stdout = ""
+    stderr = ""
+    sock.settimeout(1)
+    try:
+        while time.monotonic() < deadline and not resized:
+            try:
+                message_type = receive(sock, 1)[0]
+            except TimeoutError:
+                sock.sendall(
+                    struct.pack("!BBHHHH", 3, 1, 0, 0, target[0], target[1])
+                )
+                continue
+            if message_type == 0:
+                _, rectangle_count = struct.unpack("!BH", receive(sock, 3))
+                for _ in range(rectangle_count):
+                    _, _, rect_width, rect_height, encoding = struct.unpack(
+                        "!HHHHi", receive(sock, 12)
+                    )
+                    if encoding == -223 and (rect_width, rect_height) == target:
+                        resized = True
+                    elif encoding == 0:
+                        receive(sock, rect_width * rect_height * bytes_per_pixel)
+                if not resized:
+                    sock.sendall(
+                        struct.pack("!BBHHHH", 3, 1, 0, 0, target[0], target[1])
+                    )
+            elif message_type == 2:
+                continue
+            elif message_type == 3:
+                receive(sock, 3)
+                receive(sock, struct.unpack("!I", receive(sock, 4))[0])
+            else:
+                raise RuntimeError(f"unexpected VNC message type: {message_type}")
+        if not resized:
+            raise RuntimeError(f"VNC resize notification not received for {target}")
+        stdout, stderr = process.communicate(
+            timeout=max(1, deadline - time.monotonic())
+        )
+        if process.returncode != 0:
+            raise RuntimeError(f"firna-screen resize failed: {stderr.strip()}")
+    finally:
+        sock.close()
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate()
+    acknowledgment = json.loads(stdout)
     if (acknowledgment.get("width"), acknowledgment.get("height")) != target:
         raise RuntimeError(f"wrong resize acknowledgment: {acknowledgment!r}")
-    sock.sendall(struct.pack("!BBHHHH", 3, 1, 0, 0, target[0], target[1]))
-    deadline = time.monotonic() + 15
-    while time.monotonic() < deadline:
-        message_type = receive(sock, 1)[0]
-        if message_type == 0:
-            _, rectangle_count = struct.unpack("!BH", receive(sock, 3))
-            for _ in range(rectangle_count):
-                _, _, rect_width, rect_height, encoding = struct.unpack(
-                    "!HHHHi", receive(sock, 12)
-                )
-                if encoding == -223 and (rect_width, rect_height) == target:
-                    check(port, target)
-                    sock.close()
-                    return
-                if encoding == 0:
-                    receive(sock, rect_width * rect_height * bytes_per_pixel)
-        elif message_type == 2:
-            continue
-        elif message_type == 3:
-            receive(sock, 3)
-            receive(sock, struct.unpack("!I", receive(sock, 4))[0])
-        else:
-            raise RuntimeError(f"unexpected VNC message type: {message_type}")
-    raise RuntimeError(f"VNC resize notification not received for {target}")
+    check(port, target)
 
 
 mode = sys.argv[1]
@@ -384,6 +404,10 @@ const report = () => {
 addEventListener('resize', report);
 report();
 </script>'''
+history_page = b'''<!doctype html>
+<meta charset="utf-8">
+<title>history-smoke</title>
+<main>history target</main>'''
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -391,6 +415,9 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/":
             body = page
+            content_type = "text/html; charset=utf-8"
+        elif parsed.path == "/second.html":
+            body = history_page
             content_type = "text/html; charset=utf-8"
         elif parsed.path == "/report":
             state.update({key: values[-1] for key, values in parse_qs(parsed.query).items()})
@@ -423,10 +450,23 @@ for _ in {1..40}; do
 done
 curl --fail --silent http://127.0.0.1:8377/ >/dev/null
 
+assert_capture_title() {
+  local expected_title="$1"
+  python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+assert payload.get("ok") is True
+assert payload["result"]["capture"]["title"] == sys.argv[1]
+' "$expected_title"
+}
+
+mkdir -p "$session_root"
 browser_open="$({
-  DISPLAY=:0 bowser --json-envelope --headed --no-ai \
+  run_bowser --json-envelope --headed --no-ai \
     --chrome-path /usr/bin/google-chrome-stable \
-    --session-dir "${site_root}/session" --chrome-args=--kiosk --timeout 45 \
+    --session-dir "$session_root" --chrome-args=--kiosk --timeout 45 \
     get --format json http://127.0.0.1:8377/
 } 2>"${site_root}/bowser-open.err")"
 browser_session_id="$(python3 - "$browser_open" <<'PY'
@@ -442,6 +482,59 @@ assert isinstance(session, str) and session.startswith("bsr_")
 print(session)
 PY
 )"
+pgrep -af 'chrome.*--kiosk' >/dev/null
+printf '%s\n' 'OK headed kiosk launch and capture'
+
+second_capture="$(
+  run_bowser --json-envelope --no-ai --session-dir "$session_root" \
+    --session "$browser_session_id" \
+    get --format json http://127.0.0.1:8377/second.html
+)"
+assert_capture_title 'history-smoke' <<<"$second_capture"
+back_capture="$(
+  run_bowser --json-envelope --no-ai --session-dir "$session_root" \
+    --session "$browser_session_id" back --format json
+)"
+assert_capture_title 'viewport-smoke' <<<"$back_capture"
+forward_capture="$(
+  run_bowser --json-envelope --no-ai --session-dir "$session_root" \
+    --session "$browser_session_id" forward --format json
+)"
+assert_capture_title 'history-smoke' <<<"$forward_capture"
+reload_capture="$(
+  run_bowser --json-envelope --no-ai --session-dir "$session_root" \
+    --session "$browser_session_id" reload --format json
+)"
+assert_capture_title 'history-smoke' <<<"$reload_capture"
+printf '%s\n' 'OK back, forward, and reload operations'
+
+inventory="$(
+  run_bowser --json-envelope --session-dir "$session_root" \
+    session info "$browser_session_id"
+)"
+python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+assert payload.get("ok") is True
+session = payload["result"]["session"]
+selected = session["selected_page_id"]
+pages = session["pages"]
+assert any(
+    page["id"] == selected
+    and page["last_url"] == "http://127.0.0.1:8377/second.html"
+    and page["last_title"] == "history-smoke"
+    for page in pages
+)
+' <<<"$inventory"
+printf '%s\n' 'OK live browser inventory'
+
+root_capture="$(
+  run_bowser --json-envelope --no-ai --session-dir "$session_root" \
+    --session "$browser_session_id" back --format json
+)"
+assert_capture_title 'viewport-smoke' <<<"$root_capture"
 
 wait_for_browser_metrics() {
   python3 - "$1" "$2" <<'PY'
@@ -457,8 +550,6 @@ expected = {
     "screen_height": str(height),
     "inner_width": str(width),
     "inner_height": str(height),
-    "outer_width": str(width),
-    "outer_height": str(height),
     "breakpoint": expected_breakpoint,
 }
 deadline = time.monotonic() + 15
@@ -470,20 +561,30 @@ while time.monotonic() < deadline:
     except Exception:
         time.sleep(0.1)
         continue
-    if last == expected:
-        break
+    if all(last.get(key) == value for key, value in expected.items()):
+        try:
+            outer_contains_viewport = (
+                int(last["outer_width"]) >= width
+                and int(last["outer_height"]) >= height
+            )
+        except (KeyError, TypeError, ValueError):
+            outer_contains_viewport = False
+        if outer_contains_viewport:
+            break
     time.sleep(0.1)
 else:
-    raise RuntimeError(f"browser metrics {last!r} did not become {expected!r}")
+    raise RuntimeError(
+        f"browser metrics {last!r} did not match viewport {expected!r}"
+    )
 PY
 }
 
 assert_bowser_layout() {
   local expected="$1"
   local capture_file="${site_root}/capture-envelope.json"
-  DISPLAY=:0 bowser --json-envelope --headed --no-ai \
+  run_bowser --json-envelope --headed --no-ai \
     --chrome-path /usr/bin/google-chrome-stable \
-    --session-dir "${site_root}/session" --session "$browser_session_id" \
+    --session-dir "$session_root" --session "$browser_session_id" \
     --chrome-args=--kiosk --timeout 45 capture --format json >"$capture_file"
   python3 - "$expected" "$capture_file" <<'PY'
 import json

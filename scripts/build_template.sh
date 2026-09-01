@@ -2,14 +2,10 @@
 set -euo pipefail
 
 usage() {
-  printf 'usage: %s <environment-name> [--skip-existing]\n' "$0" >&2
+  printf 'usage: %s <environment-name> [build options]\n' "$0" >&2
 }
 
-if [[ "$#" -lt 1 || "$#" -gt 2 ]]; then
-  usage
-  exit 64
-fi
-if [[ "$#" -eq 2 && "$2" != "--skip-existing" ]]; then
+if [[ "$#" -lt 1 ]]; then
   usage
   exit 64
 fi
@@ -21,6 +17,7 @@ fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly repo_root
 env_name="$1"
+shift
 env_dir="${repo_root}/envs/${env_name}"
 manifest="${env_dir}/manifest.yaml"
 
@@ -43,9 +40,7 @@ python_args=(
   --cpu "$cpu"
   --memory-mb "$memory_mb"
 )
-if [[ "${2:-}" == "--skip-existing" ]]; then
-  python_args+=(--skip-existing)
-fi
+python_args+=("$@")
 
 if ! "$python_command" -c 'import e2b' >/dev/null 2>&1; then
   printf 'error: %s cannot import e2b; install requirements.txt\n' \

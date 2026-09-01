@@ -13,6 +13,7 @@ RUN apt-get update \
         fonts-noto-color-emoji \
         fuse3 \
         gnupg \
+        iproute2 \
         libasound2t64 \
         lsb-release \
         fluxbox \
@@ -41,10 +42,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CHROME_VERSION=152.0.7977.64-1
+ENV CHROME_URL=https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_152.0.7977.64-1_amd64.deb
 ENV CHROME_SHA256=4eae0736a812d9bc851cd2937f7af00e47dbaf8305845eed452703ff009873c7
 
 RUN curl --fail --silent --show-error --location --retry 5 \
-        https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+        "$CHROME_URL" \
         --output /tmp/chrome.deb \
     && printf '%s  %s\n' "$CHROME_SHA256" /tmp/chrome.deb > /tmp/chrome.sha256 \
     && sha256sum --check /tmp/chrome.sha256 \
@@ -69,6 +71,11 @@ RUN curl --fail --silent --show-error --location --retry 5 \
     && rm -rf /tmp/bowser /tmp/bowser.tar.gz /tmp/bowser.sha256
 
 ENV BOWSER_CHROME_PATH=/usr/bin/google-chrome-stable
+
+COPY contracts/browser-bowser.json /etc/firna/browser-bowser.json
+COPY scripts/verify_bowser_contract.py /usr/local/libexec/firna-verify-bowser-contract
+
+RUN chmod 0755 /usr/local/libexec/firna-verify-bowser-contract
 
 # hadolint ignore=SC2016
 RUN mkdir -p /etc/firna-screen \

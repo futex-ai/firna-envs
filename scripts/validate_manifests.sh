@@ -127,12 +127,30 @@ for dir in "$envs_root"/*/; do
 
   if yq -e '.bowser != null' "$manifest" >/dev/null 2>&1; then
     bowser_version="$(yq -r '.bowser.version // ""' "$manifest")"
+    bowser_contract="$(yq -r '.bowser.contract // ""' "$manifest")"
     bowser_sha="$(yq -r '.bowser.sha256 // ""' "$manifest")"
     if [[ ! "$bowser_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
       report_error "${manifest#"${repo_root}/"}: bowser.version must be semantic x.y.z"
     fi
     if [[ ! "$bowser_sha" =~ ^[0-9a-f]{64}$ ]]; then
       report_error "${manifest#"${repo_root}/"}: bowser.sha256 must be a lowercase SHA-256 digest"
+    fi
+    contract_file=''
+    if [[ ! "$bowser_contract" =~ ^contracts/[a-z0-9][a-z0-9-]*\.json$ ]]; then
+      report_error "${manifest#"${repo_root}/"}: bowser.contract must name a JSON file under contracts"
+    else
+      contract_file="${repo_root}/${bowser_contract}"
+      if [[ ! -f "$contract_file" ]]; then
+        report_error "${bowser_contract} is missing"
+      elif ! python3 "${repo_root}/scripts/verify_bowser_contract.py" \
+        "$contract_file" --contract-only; then
+        report_error "${bowser_contract} does not satisfy the Bowser contract schema"
+      else
+        contract_bowser_version="$(yq -r '.bowser_version // ""' "$contract_file")"
+        if [[ "$contract_bowser_version" != "$bowser_version" ]]; then
+          report_error "${manifest#"${repo_root}/"}: bowser.version must match ${bowser_contract}"
+        fi
+      fi
     fi
     dockerfile="${dir}Dockerfile"
     if [[ -f "$dockerfile" ]]; then
@@ -142,27 +160,40 @@ for dir in "$envs_root"/*/; do
       if ! grep -Fqx "ENV BOWSER_SHA256=${bowser_sha}" "$dockerfile"; then
         report_error "${dockerfile#"${repo_root}/"}: BOWSER_SHA256 must match the manifest"
       fi
+      if [[ -n "$contract_file" ]] \
+        && ! grep -Fqx "COPY ${bowser_contract} /etc/firna/browser-bowser.json" "$dockerfile"; then
+        report_error "${dockerfile#"${repo_root}/"}: Bowser contract must be installed from the manifest path"
+      fi
+      if ! grep -Fqx \
+        'COPY scripts/verify_bowser_contract.py /usr/local/libexec/firna-verify-bowser-contract' \
+        "$dockerfile"; then
+        report_error "${dockerfile#"${repo_root}/"}: Bowser contract verifier must be installed"
+      fi
     fi
     if [[ -f "$verify_script" ]]; then
-      if ! grep -Fq 'bowser --json-envelope capabilities' "$verify_script"; then
-        report_error "${verify_script#"${repo_root}/"} must verify Bowser capabilities"
+      if ! grep -Fq \
+        'bowser --json-envelope capabilities' \
+        "$verify_script" \
+        || ! grep -Fq "\"\$bowser_contract_verifier\" \"\$bowser_contract\"" \
+        "$verify_script"; then
+        report_error "${verify_script#"${repo_root}/"} must validate Bowser against the installed contract"
       fi
-      for required_feature in history kiosk_launch live_inventory; do
-        if ! grep -Fq "\"${required_feature}\"" "$verify_script"; then
-          report_error "${verify_script#"${repo_root}/"} must verify Bowser feature ${required_feature}"
-        fi
-      done
     fi
   fi
 
   if yq -e '.chrome != null' "$manifest" >/dev/null 2>&1; then
     chrome_version="$(yq -r '.chrome.version // ""' "$manifest")"
+    chrome_url="$(yq -r '.chrome.url // ""' "$manifest")"
     chrome_sha="$(yq -r '.chrome.sha256 // ""' "$manifest")"
     if [[ ! "$chrome_version" =~ ^[0-9]+(\.[0-9]+){3}-[0-9]+$ ]]; then
       report_error "${manifest#"${repo_root}/"}: chrome.version must be a four-part Debian package version"
     fi
     if [[ ! "$chrome_sha" =~ ^[0-9a-f]{64}$ ]]; then
       report_error "${manifest#"${repo_root}/"}: chrome.sha256 must be a lowercase SHA-256 digest"
+    fi
+    expected_chrome_url="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_${chrome_version}_amd64.deb"
+    if [[ "$chrome_url" != "$expected_chrome_url" ]]; then
+      report_error "${manifest#"${repo_root}/"}: chrome.url must be the exact versioned Google package URL"
     fi
     dockerfile="${dir}Dockerfile"
     if [[ -f "$dockerfile" ]]; then
@@ -171,6 +202,12 @@ for dir in "$envs_root"/*/; do
       fi
       if ! grep -Fqx "ENV CHROME_SHA256=${chrome_sha}" "$dockerfile"; then
         report_error "${dockerfile#"${repo_root}/"}: CHROME_SHA256 must match the manifest"
+      fi
+      if ! grep -Fqx "ENV CHROME_URL=${chrome_url}" "$dockerfile"; then
+        report_error "${dockerfile#"${repo_root}/"}: CHROME_URL must match the manifest"
+      fi
+      if ! grep -Fq "\"\$CHROME_URL\"" "$dockerfile"; then
+        report_error "${dockerfile#"${repo_root}/"}: Chrome download must use CHROME_URL"
       fi
     fi
   fi

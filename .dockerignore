@@ -1,0 +1,5 @@
+.git
+.context
+.venv
+.venv*
+**/__pycache__

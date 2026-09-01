@@ -28,14 +28,16 @@ implementation work is indexed in [plans/README.md](./plans/README.md).
 | Environment | Template | Purpose |
 | --- | --- | --- |
 | `general` | `firna-general-v3` | Debian-based command-line and build tools for everyday repository work |
-| `browser` | `firna-browser-v10` | Google Chrome, a dynamically resizable screen stack, and the checksum-pinned Bowser CLI for browser automation |
+| `browser` | `firna-browser-v11` | Google Chrome, a dynamically resizable screen stack, and the checksum-pinned Bowser CLI for browser automation |
 
-The browser definition pins both the Chrome amd64 Debian package and the
-Bowser x86_64 Linux release archive by version and SHA-256. Its release smoke
-also requires Bowser's kiosk-launch, history, and live-inventory capabilities
-before the template can be consumed by Firna's native browser chrome. Every
-environment also pins gcsfuse and the Google repository key checksum so Firna
-can mount the owning agent tree's durable drive at runtime.
+The browser definition pins an exact versioned Chrome amd64 Debian-package URL
+and the Bowser x86_64 Linux release archive by version and SHA-256. Its bundled
+machine-readable Bowser contract is the single source for the expected driver
+version, envelope version, and required kiosk-launch, history, and
+live-inventory features. The release smoke validates that contract and performs
+the corresponding browser operations before an immutable alias is promoted.
+Every environment also pins gcsfuse and the Google repository key checksum so
+Firna can mount the owning agent tree's durable drive at runtime.
 
 The browser screen helper exposes `ensure`, versioned `capabilities`, and
 bounded `resize <width> <height>` commands. Version 1 applies exact CSS-pixel
@@ -56,8 +58,11 @@ immutable E2B template `firna-<env>-v<N>`. The matching Git tag is
 `<env>-v<N>`.
 
 The tag, manifest, Dockerfile, and GitHub Actions release run form one
-provenance chain. Published names are never rebuilt with different contents;
-change the manifest version and publish a new tag instead.
+provenance chain. Normal releases never reassign a published final alias;
+change the manifest version and publish a new tag instead. The workflow's
+explicit recovery control is reserved for a final alias whose own release
+smoke failed, and only reassigns it to a separately built and smoke-tested
+template id.
 
 ## Validate and build locally
 
@@ -99,11 +104,20 @@ production and preview E2B teams, then boots a sandbox in each team and runs
 the environment's `verify.sh`. Publishing is protected by the repository's
 `release` environment, whose deployment policy accepts only version tags.
 
-The release path is idempotent: if the immutable template name already exists,
-automation leaves it unchanged and still smoke-tests it. A normal local build
-continues to reject an existing name so accidental replacement is visible. The
-production and preview matrix runs one account at a time so an in-progress
-template publication cannot be mistaken for a ready immutable release.
+The release path builds a unique staging tag, smoke-tests that exact staged
+template, then assigns the immutable template's `default` tag only after the
+smoke succeeds. Promotion checks that the final alias resolves to the staged
+template id. A rerun may reuse a final alias only after resolving its id and
+still smoke-testing it; an incomplete staging build can never claim the final
+name. A normal local build continues to reject an existing name so accidental
+replacement is visible. The production and preview matrix runs one account at
+a time so an in-progress template publication cannot be mistaken for a ready
+immutable release.
+
+If an existing final alias fails its release smoke, manually dispatch the same
+tag with `recover_existing` enabled. That explicit recovery builds and smokes a
+fresh staging identity before reassigning the final alias; leave the control
+disabled for ordinary retries.
 
 To audit a deployed template, start with its template name, remove the `firna-`
 prefix to find the Git tag, and inspect that tag's manifest and Dockerfile. The

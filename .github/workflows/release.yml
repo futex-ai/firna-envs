@@ -10,6 +10,11 @@ on:
         description: Environment tag, for example general-v2
         required: true
         type: string
+      recover_existing:
+        description: Replace an existing alias only after its release smoke has failed
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -44,6 +49,7 @@ jobs:
       - name: Resolve and validate tag
         env:
           REQUESTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RECOVER_EXISTING_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.recover_existing || false }}
         run: |
           if [[ ! "$REQUESTED_TAG" =~ ^[a-z0-9][a-z0-9-]*-v[1-9][0-9]*$ ]]; then
             echo "invalid environment tag: $REQUESTED_TAG" >&2
@@ -62,18 +68,50 @@ jobs:
             echo "tag $REQUESTED_TAG does not match $manifest" >&2
             exit 1
           fi
-          echo "ENV_NAME=$env_name" >> "$GITHUB_ENV"
-          echo "TEMPLATE=firna-${REQUESTED_TAG}" >> "$GITHUB_ENV"
+          {
+            echo "ENV_NAME=$env_name"
+            echo "TEMPLATE=firna-${REQUESTED_TAG}"
+            echo "RECOVER_EXISTING=$RECOVER_EXISTING_INPUT"
+          } >> "$GITHUB_ENV"
 
       - name: Install E2B SDK
         run: python3 -m pip install --requirement requirements.txt
 
-      - name: Publish immutable template if missing
+      - name: Stage or reuse template
+        id: template
         env:
           E2B_API_KEY: ${{ matrix.account == 'prod' && secrets.E2B_API_KEY_PROD || secrets.E2B_API_KEY_PREVIEW }}
-        run: ./scripts/build_template.sh "$ENV_NAME" --skip-existing
+        run: |
+          stage_tag="stage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.account }}"
+          build_options=(
+            --skip-existing
+            --stage-tag "$stage_tag"
+            --result-file "$GITHUB_OUTPUT"
+          )
+          if [[ "$RECOVER_EXISTING" == 'true' ]]; then
+            build_options+=(--recover-existing)
+          fi
+          ./scripts/build_template.sh "$ENV_NAME" "${build_options[@]}"
 
-      - name: Smoke-test published template
+      - name: Smoke-test staged or published template
         env:
           E2B_API_KEY: ${{ matrix.account == 'prod' && secrets.E2B_API_KEY_PROD || secrets.E2B_API_KEY_PREVIEW }}
-        run: python3 scripts/run_in_sandbox.py "$TEMPLATE" "envs/${ENV_NAME}/verify.sh"
+        run: >-
+          python3 scripts/run_in_sandbox.py
+          "${{ steps.template.outputs.template_ref }}"
+          "envs/${ENV_NAME}/verify.sh"
+
+      - name: Promote smoke-tested template
+        if: steps.template.outputs.needs_promotion == 'true'
+        env:
+          E2B_API_KEY: ${{ matrix.account == 'prod' && secrets.E2B_API_KEY_PROD || secrets.E2B_API_KEY_PREVIEW }}
+        run: |
+          promotion_options=(
+            --staging-template "${{ steps.template.outputs.template_ref }}"
+            --final-template "$TEMPLATE"
+            --expected-template-id "${{ steps.template.outputs.template_id }}"
+          )
+          if [[ "$RECOVER_EXISTING" == 'true' ]]; then
+            promotion_options+=(--allow-reassign)
+          fi
+          python3 scripts/promote_template.py "${promotion_options[@]}"

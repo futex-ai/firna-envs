@@ -49,3 +49,14 @@ if [[ "$(<"$calls_path")" != "${expected_call} --skip-existing" ]]; then
   printf 'unexpected idempotent release call: %s\n' "$(<"$calls_path")" >&2
   exit 1
 fi
+
+E2B_API_KEY=test-key \
+  FIRNA_ENVS_PYTHON="${test_root}/bin/python3" \
+  MOCK_PYTHON_CALLS="$calls_path" \
+  "${repo_root}/scripts/build_template.sh" general --skip-existing \
+    --stage-tag stage-run --result-file "${test_root}/result"
+
+if [[ "$(<"$calls_path")" != "${expected_call} --skip-existing --stage-tag stage-run --result-file ${test_root}/result" ]]; then
+  printf 'unexpected staged release call: %s\n' "$(<"$calls_path")" >&2
+  exit 1
+fi
