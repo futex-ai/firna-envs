@@ -1,6 +1,6 @@
 name: browser
-version: 5
-description: Browser automation base environment with Chrome, Bowser, the screen stack, and durable-drive mount support
+version: 6
+description: Browser automation base environment with Chrome, Bowser, a dynamically resizable screen stack, and durable-drive mount support
 resources:
   cpu: 2
   memory_mb: 4096

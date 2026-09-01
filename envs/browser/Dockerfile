@@ -18,10 +18,12 @@ RUN apt-get update \
         fluxbox \
         procps \
         python3 \
+        tigervnc-standalone-server \
+        util-linux \
         websockify \
         x11-utils \
+        x11-xserver-utils \
         x11vnc \
-        xvfb \
     && curl --fail --silent --show-error --location --retry 5 \
         https://packages.cloud.google.com/apt/doc/apt-key.gpg \
         --output /tmp/google-cloud-apt-key.gpg \
@@ -76,15 +78,30 @@ RUN mkdir -p /etc/firna-screen \
         > /etc/firna-screen/fluxbox-rc \
     && printf '%s\n' \
         '#!/bin/sh' \
+        '# BEGIN FIRNA_SCREEN_HELPER' \
         'set -eu' \
         '' \
         'DISPLAY_ID=":0"' \
+        'DISPLAY_OUTPUT="VNC-0"' \
         'WATCH_VNC_PORT=5900' \
         'CONTROL_VNC_PORT=5901' \
         'WATCH_BRIDGE_PORT=6080' \
         'CONTROL_BRIDGE_PORT=6081' \
         'LOG_DIR="/tmp/firna-screen"' \
+        'LOCK_FILE="/tmp/firna-screen.lock"' \
+        'MODE_STATE_FILE="${LOG_DIR}/mode"' \
+        'XVNC_SOCKET="${LOG_DIR}/xvnc.sock"' \
         'READY_TIMEOUT_SECONDS=30' \
+        'RESIZE_ATTEMPTS=150' \
+        'MIN_WIDTH=320' \
+        'MAX_WIDTH=3840' \
+        'MIN_HEIGHT=240' \
+        'MAX_HEIGHT=2160' \
+        'MAX_PIXELS=8294400' \
+        '' \
+        'capabilities() {' \
+        '    printf '\''%s\n'\'' '\''{"version":1,"features":{"dynamic_resize":true},"viewport":{"min_width":320,"max_width":3840,"min_height":240,"max_height":2160,"max_pixels":8294400}}'\''' \
+        '}' \
         '' \
         'port_listening() {' \
         '    hex_port=$(printf '\''%04X'\'' "$1")' \
@@ -105,6 +122,10 @@ RUN mkdir -p /etc/firna-screen \
         '    done' \
         '}' \
         '' \
+        'display_dimensions() {' \
+        '    xdpyinfo -display "$DISPLAY_ID" | awk '\''/dimensions:/{print $2; exit}'\''' \
+        '}' \
+        '' \
         'wait_for_display() {' \
         '    waited=0' \
         '    while ! xdpyinfo -display "$DISPLAY_ID" >/dev/null 2>&1; do' \
@@ -117,14 +138,28 @@ RUN mkdir -p /etc/firna-screen \
         '    done' \
         '}' \
         '' \
-        'ensure() {' \
-        '    if port_listening "$WATCH_BRIDGE_PORT" && port_listening "$CONTROL_BRIDGE_PORT"; then' \
-        '        exit 0' \
-        '    fi' \
+        'wait_for_geometry() {' \
+        '    target="$1"' \
+        '    waited=0' \
+        '    while [ "$(display_dimensions)" != "$target" ]; do' \
+        '        if [ "$waited" -ge "$RESIZE_ATTEMPTS" ]; then' \
+        '            echo "firna-screen: display did not apply requested geometry" >&2' \
+        '            exit 1' \
+        '        fi' \
+        '        sleep 0.1' \
+        '        waited=$((waited + 1))' \
+        '    done' \
+        '}' \
+        '' \
+        'ensure_locked() {' \
         '    mkdir -p "$LOG_DIR"' \
+        '    chmod 0700 "$LOG_DIR"' \
         '    if ! xdpyinfo -display "$DISPLAY_ID" >/dev/null 2>&1; then' \
-        '        nohup Xvfb "$DISPLAY_ID" -screen 0 1280x800x24 -nolisten tcp \' \
-        '            >"$LOG_DIR/xvfb.log" 2>&1 &' \
+        '        unlink "$XVNC_SOCKET" >/dev/null 2>&1 || true' \
+        '        nohup Xtigervnc "$DISPLAY_ID" -ac -geometry 1280x800 -depth 24 \' \
+        '            -rfbport -1 -rfbunixpath "$XVNC_SOCKET" -rfbunixmode 0600 \' \
+        '            -SecurityTypes None -desktop firna-display -noreset -nolisten tcp \' \
+        '            >"$LOG_DIR/xvnc.log" 2>&1 &' \
         '        wait_for_display' \
         '    fi' \
         '    if ! pgrep -f "fluxbox.*firna-screen" >/dev/null 2>&1; then' \
@@ -133,12 +168,13 @@ RUN mkdir -p /etc/firna-screen \
         '    fi' \
         '    if ! port_listening "$WATCH_VNC_PORT"; then' \
         '        x11vnc -display "$DISPLAY_ID" -viewonly -shared -forever -nopw \' \
-        '            -localhost -rfbport "$WATCH_VNC_PORT" -desktop firna-watch \' \
-        '            -o "$LOG_DIR/x11vnc-watch.log" -bg >/dev/null 2>&1 || true' \
+        '            -xrandr resize -localhost -rfbport "$WATCH_VNC_PORT" \' \
+        '            -desktop firna-watch -o "$LOG_DIR/x11vnc-watch.log" \' \
+        '            -bg >/dev/null 2>&1 || true' \
         '        wait_for_port "$WATCH_VNC_PORT"' \
         '    fi' \
         '    if ! port_listening "$CONTROL_VNC_PORT"; then' \
-        '        x11vnc -display "$DISPLAY_ID" -shared -forever -nopw \' \
+        '        x11vnc -display "$DISPLAY_ID" -shared -forever -nopw -xrandr resize \' \
         '            -localhost -rfbport "$CONTROL_VNC_PORT" -desktop firna-control \' \
         '            -o "$LOG_DIR/x11vnc-control.log" -bg >/dev/null 2>&1 || true' \
         '        wait_for_port "$CONTROL_VNC_PORT"' \
@@ -153,17 +189,102 @@ RUN mkdir -p /etc/firna-screen \
         '    fi' \
         '    wait_for_port "$WATCH_BRIDGE_PORT"' \
         '    wait_for_port "$CONTROL_BRIDGE_PORT"' \
-        '    exit 0' \
+        '}' \
+        '' \
+        'is_unsigned_integer() {' \
+        '    case "$1" in' \
+        '        '\'''\''|*[!0-9]*) return 1 ;;' \
+        '        0|[1-9]*) return 0 ;;' \
+        '        *) return 1 ;;' \
+        '    esac' \
+        '}' \
+        '' \
+        'validate_size() {' \
+        '    width="$1"' \
+        '    height="$2"' \
+        '    if ! is_unsigned_integer "$width" \' \
+        '        || ! is_unsigned_integer "$height" \' \
+        '        || [ "$width" -lt "$MIN_WIDTH" ] \' \
+        '        || [ "$width" -gt "$MAX_WIDTH" ] \' \
+        '        || [ "$height" -lt "$MIN_HEIGHT" ] \' \
+        '        || [ "$height" -gt "$MAX_HEIGHT" ] \' \
+        '        || [ "$((width * height))" -gt "$MAX_PIXELS" ]; then' \
+        '        echo "firna-screen: invalid viewport" >&2' \
+        '        return 2' \
+        '    fi' \
+        '}' \
+        '' \
+        'resize_locked() {' \
+        '    width="$1"' \
+        '    height="$2"' \
+        '    validate_size "$width" "$height"' \
+        '    ensure_locked' \
+        '    target="${width}x${height}"' \
+        '    if [ "$(display_dimensions)" = "$target" ]; then' \
+        '        printf '\''{"version":1,"width":%s,"height":%s}\n'\'' "$width" "$height"' \
+        '        return' \
+        '    fi' \
+        '' \
+        '    hsync_start=$((width + 16))' \
+        '    hsync_end=$((hsync_start + 32))' \
+        '    htotal=$((hsync_end + 48))' \
+        '    vsync_start=$((height + 3))' \
+        '    vsync_end=$((vsync_start + 5))' \
+        '    vtotal=$((vsync_end + 10))' \
+        '    clock=$(awk -v h="$htotal" -v v="$vtotal" \' \
+        '        '\''BEGIN { printf "%.3f", h * v * 60 / 1000000 }'\'')' \
+        '    mode="firna_${width}x${height}_$$"' \
+        '    DISPLAY="$DISPLAY_ID" xrandr --newmode "$mode" "$clock" \' \
+        '        "$width" "$hsync_start" "$hsync_end" "$htotal" \' \
+        '        "$height" "$vsync_start" "$vsync_end" "$vtotal"' \
+        '    DISPLAY="$DISPLAY_ID" xrandr --addmode "$DISPLAY_OUTPUT" "$mode"' \
+        '    DISPLAY="$DISPLAY_ID" xrandr --output "$DISPLAY_OUTPUT" --mode "$mode"' \
+        '    wait_for_geometry "$target"' \
+        '' \
+        '    previous=""' \
+        '    if [ -f "$MODE_STATE_FILE" ]; then' \
+        '        IFS= read -r previous < "$MODE_STATE_FILE" || previous=""' \
+        '    fi' \
+        '    printf '\''%s\n'\'' "$mode" > "$MODE_STATE_FILE"' \
+        '    case "$previous" in' \
+        '        firna_*)' \
+        '            DISPLAY="$DISPLAY_ID" xrandr --delmode "$DISPLAY_OUTPUT" \' \
+        '                "$previous" >/dev/null 2>&1 || true' \
+        '            DISPLAY="$DISPLAY_ID" xrandr --rmmode "$previous" \' \
+        '                >/dev/null 2>&1 || true' \
+        '            ;;' \
+        '    esac' \
+        '    printf '\''{"version":1,"width":%s,"height":%s}\n'\'' "$width" "$height"' \
+        '}' \
+        '' \
+        'run_locked() {' \
+        '    exec 9>"$LOCK_FILE"' \
+        '    flock -x 9' \
+        '    "$@"' \
+        '}' \
+        '' \
+        'usage() {' \
+        '    echo "usage: firna-screen ensure|capabilities|resize <width> <height>" >&2' \
+        '    exit 2' \
         '}' \
         '' \
         'case "${1:-}" in' \
-        'ensure)' \
-        '    ensure' \
-        '    ;;' \
-        '*)' \
-        '    echo "usage: firna-screen ensure" >&2' \
-        '    exit 2' \
-        '    ;;' \
+        '    ensure)' \
+        '        [ "$#" -eq 1 ] || usage' \
+        '        run_locked ensure_locked' \
+        '        ;;' \
+        '    capabilities)' \
+        '        [ "$#" -eq 1 ] || usage' \
+        '        capabilities' \
+        '        ;;' \
+        '    resize)' \
+        '        [ "$#" -eq 3 ] || usage' \
+        '        run_locked resize_locked "$2" "$3"' \
+        '        ;;' \
+        '    *)' \
+        '        usage' \
+        '        ;;' \
         'esac' \
+        '# END FIRNA_SCREEN_HELPER' \
         > /usr/local/bin/firna-screen \
     && chmod 0755 /usr/local/bin/firna-screen

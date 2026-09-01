@@ -22,8 +22,8 @@ Browser environments also pin the bundled Bowser release:
 
 ```yaml
 name: browser
-version: 5
-description: Browser automation base environment with durable-drive mount support
+version: 6
+description: Browser automation base environment with a dynamically resizable screen stack and durable-drive mount support
 resources:
   cpu: 2
   memory_mb: 4096
