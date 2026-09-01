@@ -110,18 +110,24 @@ RUN mkdir -p /etc/firna-screen \
         '    printf '\''%s\n'\'' '\''{"version":1,"features":{"dynamic_resize":true},"viewport":{"min_width":320,"max_width":3840,"min_height":240,"max_height":2160,"max_pixels":8294400}}'\''' \
         '}' \
         '' \
-        'port_listening() {' \
-        '    hex_port=$(printf '\''%04X'\'' "$1")' \
-        '    awk -v suffix=":${hex_port}" \' \
-        '        '\''$2 ~ suffix"$" && $4 == "0A" { found = 1 } END { exit found ? 0 : 1 }'\'' \' \
-        '        /proc/net/tcp /proc/net/tcp6 2>/dev/null' \
+        'process_listening() {' \
+        '    pid_file="$1"' \
+        '    port="$2"' \
+        '    [ -r "$pid_file" ] || return 1' \
+        '    IFS= read -r pid < "$pid_file" || return 1' \
+        '    case "$pid" in '\'''\''|*[!0-9]*) return 1 ;; esac' \
+        '    kill -0 "$pid" 2>/dev/null || return 1' \
+        '    ss -H -ltnp "sport = :${port}" 2>/dev/null | \' \
+        '        awk -v marker="pid=${pid}," '\''index($0, marker) { found = 1 } END { exit found ? 0 : 1 }'\''' \
         '}' \
         '' \
-        'wait_for_port() {' \
+        'wait_for_process_port() {' \
+        '    pid_file="$1"' \
+        '    port="$2"' \
         '    waited=0' \
-        '    while ! port_listening "$1"; do' \
+        '    while ! process_listening "$pid_file" "$port"; do' \
         '        if [ "$waited" -ge "$READY_TIMEOUT_SECONDS" ]; then' \
-        '            echo "firna-screen: port $1 did not start listening" >&2' \
+        '            echo "firna-screen: owned process did not start listening on port $port" >&2' \
         '            exit 1' \
         '        fi' \
         '        sleep 1' \
@@ -201,40 +207,40 @@ RUN mkdir -p /etc/firna-screen \
         '        DISPLAY="$DISPLAY_ID" nohup fluxbox -rc /etc/firna-screen/fluxbox-rc \' \
         '            -display "$DISPLAY_ID" >"$LOG_DIR/fluxbox.log" 2>&1 9>&- &' \
         '    fi' \
-        '    if ! port_listening "$WATCH_VNC_PORT"; then' \
+        '    if ! process_listening "$WATCH_VNC_PID_FILE" "$WATCH_VNC_PORT"; then' \
         '        unlink "$WATCH_VNC_PID_FILE" >/dev/null 2>&1 || true' \
         '        X11VNC_REMOTE="$WATCH_VNC_REMOTE" nohup x11vnc \' \
-        '            -display "$DISPLAY_ID" -viewonly -shared -forever -nopw \' \
+        '            -display "$DISPLAY_ID" -noshm -viewonly -shared -forever -nopw \' \
         '            -xrandr resize -localhost -rfbport "$WATCH_VNC_PORT" \' \
         '            -desktop firna-watch -o "$LOG_DIR/x11vnc-watch.log" \' \
         '            >/dev/null 2>&1 9>&- &' \
         '        printf '\''%s\n'\'' "$!" > "$WATCH_VNC_PID_FILE"' \
-        '        wait_for_port "$WATCH_VNC_PORT"' \
+        '        wait_for_process_port "$WATCH_VNC_PID_FILE" "$WATCH_VNC_PORT"' \
         '    fi' \
-        '    if ! port_listening "$CONTROL_VNC_PORT"; then' \
+        '    if ! process_listening "$CONTROL_VNC_PID_FILE" "$CONTROL_VNC_PORT"; then' \
         '        unlink "$CONTROL_VNC_PID_FILE" >/dev/null 2>&1 || true' \
         '        X11VNC_REMOTE="$CONTROL_VNC_REMOTE" nohup x11vnc \' \
-        '            -display "$DISPLAY_ID" -shared -forever -nopw \' \
+        '            -display "$DISPLAY_ID" -noshm -shared -forever -nopw \' \
         '            -xrandr resize \' \
         '            -localhost -rfbport "$CONTROL_VNC_PORT" -desktop firna-control \' \
         '            -o "$LOG_DIR/x11vnc-control.log" >/dev/null 2>&1 9>&- &' \
         '        printf '\''%s\n'\'' "$!" > "$CONTROL_VNC_PID_FILE"' \
-        '        wait_for_port "$CONTROL_VNC_PORT"' \
+        '        wait_for_process_port "$CONTROL_VNC_PID_FILE" "$CONTROL_VNC_PORT"' \
         '    fi' \
-        '    if ! port_listening "$WATCH_BRIDGE_PORT"; then' \
+        '    if ! process_listening "$WATCH_BRIDGE_PID_FILE" "$WATCH_BRIDGE_PORT"; then' \
         '        unlink "$WATCH_BRIDGE_PID_FILE" >/dev/null 2>&1 || true' \
         '        nohup websockify 127.0.0.1:"$WATCH_BRIDGE_PORT" \' \
         '            127.0.0.1:"$WATCH_VNC_PORT" >"$LOG_DIR/websockify-watch.log" 2>&1 9>&- &' \
         '        printf '\''%s\n'\'' "$!" > "$WATCH_BRIDGE_PID_FILE"' \
         '    fi' \
-        '    if ! port_listening "$CONTROL_BRIDGE_PORT"; then' \
+        '    if ! process_listening "$CONTROL_BRIDGE_PID_FILE" "$CONTROL_BRIDGE_PORT"; then' \
         '        unlink "$CONTROL_BRIDGE_PID_FILE" >/dev/null 2>&1 || true' \
         '        nohup websockify 127.0.0.1:"$CONTROL_BRIDGE_PORT" \' \
         '            127.0.0.1:"$CONTROL_VNC_PORT" >"$LOG_DIR/websockify-control.log" 2>&1 9>&- &' \
         '        printf '\''%s\n'\'' "$!" > "$CONTROL_BRIDGE_PID_FILE"' \
         '    fi' \
-        '    wait_for_port "$WATCH_BRIDGE_PORT"' \
-        '    wait_for_port "$CONTROL_BRIDGE_PORT"' \
+        '    wait_for_process_port "$WATCH_BRIDGE_PID_FILE" "$WATCH_BRIDGE_PORT"' \
+        '    wait_for_process_port "$CONTROL_BRIDGE_PID_FILE" "$CONTROL_BRIDGE_PORT"' \
         '}' \
         '' \
         'is_unsigned_integer() {' \

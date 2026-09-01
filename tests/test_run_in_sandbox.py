@@ -33,10 +33,10 @@ class RunInSandboxTests(unittest.TestCase):
                 patch("run_in_sandbox.Sandbox.create", return_value=sandbox) as create,
                 redirect_stdout(StringIO()),
             ):
-                result = run_in_sandbox.run_script("firna-browser-v13", script_path)
+                result = run_in_sandbox.run_script("firna-browser-v14", script_path)
 
             self.assertEqual(result, 0)
-            create.assert_called_once_with("firna-browser-v13", timeout=900)
+            create.assert_called_once_with("firna-browser-v14", timeout=900)
             sandbox.commands.run.assert_called_once_with(
                 "bash /tmp/firna-env-verify.sh",
                 timeout=840,

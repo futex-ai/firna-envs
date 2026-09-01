@@ -1,7 +1,7 @@
 # Browser environment inventory
 
-`firna-browser-v13` evolves the v5 native-Chrome environment without changing
-its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6–v12
+`firna-browser-v14` evolves the v5 native-Chrome environment without changing
+its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6–v13
 candidates were not adopted. Their release diagnostics successively exposed
 ambiguous global process discovery, E2B platform-owned forwarding listeners,
 x11vnc recording its pre-daemonization parent PID, asynchronous RandR
@@ -12,7 +12,11 @@ screen and inner-viewport metrics, while allowing outer dimensions to remain
 larger where Chrome enforces a minimum window size. Its complete representative
 suite exceeded the release runner's former four-minute command limit before it
 could finish. V13 retains that contract and gives verification up to fourteen
-minutes inside a fifteen-minute sandbox lifetime.
+minutes inside a fifteen-minute sandbox lifetime. Its full release smoke then
+exposed the control x11vnc process crashing when E2B denied MIT-SHM attachment
+during the first RandR change. V14 disables shared-memory polling on both
+bridges and verifies the exact PID-owned loopback listener, so an E2B platform
+forwarder cannot mask a dead bridge during idempotent ensure.
 
 ## Display stack
 
@@ -24,7 +28,7 @@ minutes inside a fifteen-minute sandbox lifetime.
   control targets. Both monitor RandR changes; only the watch target carries
   `-viewonly`.
 - Websockify retains ports 6080 and 6081 for Firna's authenticated outer
-  router. No new Firna-owned network listener is part of v13.
+  router. No new Firna-owned network listener is part of v14.
 
 ## Screen helper
 
