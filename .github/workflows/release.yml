@@ -19,6 +19,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 env:
   YQ_VERSION: v4.53.3
 
@@ -36,8 +40,26 @@ jobs:
           - prod
           - preview
     steps:
-      - name: Check out repository
+      - name: Resolve requested tag
+        id: release
+        env:
+          REQUESTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RECOVER_EXISTING_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.recover_existing || false }}
+        run: |
+          if [[ ! "$REQUESTED_TAG" =~ ^[a-z0-9][a-z0-9-]*-v[1-9][0-9]*$ ]]; then
+            echo "invalid environment tag: $REQUESTED_TAG" >&2
+            exit 1
+          fi
+          {
+            echo "tag=$REQUESTED_TAG"
+            echo "recover_existing=$RECOVER_EXISTING_INPUT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out requested tag
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: refs/tags/${{ steps.release.outputs.tag }}
 
       - name: Install yq
         run: |
@@ -46,13 +68,15 @@ jobs:
             --output /usr/local/bin/yq
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Resolve and validate tag
+      - name: Verify checked-out tag and manifest
         env:
-          REQUESTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          RECOVER_EXISTING_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.recover_existing || false }}
+          REQUESTED_TAG: ${{ steps.release.outputs.tag }}
+          RECOVER_EXISTING_INPUT: ${{ steps.release.outputs.recover_existing }}
         run: |
-          if [[ ! "$REQUESTED_TAG" =~ ^[a-z0-9][a-z0-9-]*-v[1-9][0-9]*$ ]]; then
-            echo "invalid environment tag: $REQUESTED_TAG" >&2
+          tag_commit="$(git rev-parse "refs/tags/${REQUESTED_TAG}^{commit}")"
+          head_commit="$(git rev-parse HEAD)"
+          if [[ "$head_commit" != "$tag_commit" ]]; then
+            echo "checked-out commit $head_commit does not match tag $REQUESTED_TAG at $tag_commit" >&2
             exit 1
           fi
           env_name="${REQUESTED_TAG%-v*}"

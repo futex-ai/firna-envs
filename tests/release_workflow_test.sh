@@ -15,6 +15,28 @@ if ! yq -e '.on.workflow_dispatch.inputs.recover_existing.type == "boolean"' \
   exit 1
 fi
 
+if ! yq -e '.concurrency["cancel-in-progress"] == false' \
+  "$workflow" >/dev/null \
+  || ! grep -Fq "group: release-\${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}" \
+    "$workflow"; then
+  printf 'releases of the same immutable tag must be serialized\n' >&2
+  exit 1
+fi
+
+resolve_line="$(grep -n 'name: Resolve requested tag' "$workflow" | cut -d: -f1)"
+checkout_line="$(grep -n 'name: Check out requested tag' "$workflow" | cut -d: -f1)"
+verify_line="$(grep -n 'name: Verify checked-out tag and manifest' "$workflow" | cut -d: -f1)"
+if [[ -z "$resolve_line" || -z "$checkout_line" || -z "$verify_line" \
+  || "$resolve_line" -ge "$checkout_line" || "$checkout_line" -ge "$verify_line" ]]; then
+  printf 'release must validate the requested tag before exact checkout and verification\n' >&2
+  exit 1
+fi
+
+grep -Fq "ref: refs/tags/\${{ steps.release.outputs.tag }}" "$workflow"
+grep -Fq 'fetch-depth: 0' "$workflow"
+grep -Fq "git rev-parse \"refs/tags/\${REQUESTED_TAG}^{commit}\"" "$workflow"
+grep -Fq 'git rev-parse HEAD' "$workflow"
+
 stage_line="$(grep -n 'name: Stage or reuse template' "$workflow" | cut -d: -f1)"
 smoke_line="$(grep -n 'name: Smoke-test staged or published template' "$workflow" | cut -d: -f1)"
 promote_line="$(grep -n 'name: Promote smoke-tested template' "$workflow" | cut -d: -f1)"

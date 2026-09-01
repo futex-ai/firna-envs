@@ -117,7 +117,11 @@ immutable release.
 If an existing final alias fails its release smoke, manually dispatch the same
 tag with `recover_existing` enabled. That explicit recovery builds and smokes a
 fresh staging identity before reassigning the final alias; leave the control
-disabled for ordinary retries.
+disabled for ordinary retries. Manual dispatch validates the requested tag
+before checkout, checks out that exact tag, and verifies the checked-out commit
+before reading its manifest or building. Releases for the same tag are
+serialized, so a recovery cannot overlap another publication of that immutable
+source.
 
 To audit a deployed template, start with its template name, remove the `firna-`
 prefix to find the Git tag, and inspect that tag's manifest and Dockerfile. The
