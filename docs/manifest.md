@@ -22,7 +22,7 @@ Browser environments also pin the bundled Bowser release:
 
 ```yaml
 name: browser
-version: 13
+version: 14
 description: Browser automation base environment with a dynamically resizable screen stack and durable-drive mount support
 resources:
   cpu: 2

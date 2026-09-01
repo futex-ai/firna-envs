@@ -15,7 +15,7 @@ if grep -Fq -- '-screen 0 1280x800x24' "$dockerfile"; then
   exit 1
 fi
 
-grep -Fxq 'version: 13' "$manifest"
+grep -Fxq 'version: 14' "$manifest"
 grep -Fq 'tigervnc-standalone-server' "$dockerfile"
 grep -Fq 'capabilities)' "$dockerfile"
 grep -Fq 'resize)' "$dockerfile"
@@ -27,6 +27,16 @@ grep -Fq 'CONTROL_VNC_REMOTE="X11VNC_REMOTE_FIRNA_CONTROL"' "$dockerfile"
 grep -Fq 'wait_for_vnc_geometry' "$dockerfile"
 [[ "$(grep -Fc -- '-xrandr resize' "$dockerfile")" == '2' ]]
 [[ "$(grep -Fc 'nohup x11vnc' "$dockerfile")" == '2' ]]
+if [[ "$(grep -Fc -- '-noshm' "$dockerfile")" != '2' ]]; then
+  printf '%s\n' 'both x11vnc bridges must avoid unavailable MIT-SHM polling' >&2
+  exit 1
+fi
+grep -Fq "process_listening \"\$WATCH_VNC_PID_FILE\" \"\$WATCH_VNC_PORT\"" "$dockerfile"
+grep -Fq "process_listening \"\$CONTROL_VNC_PID_FILE\" \"\$CONTROL_VNC_PORT\"" "$dockerfile"
+if grep -Fq "if ! port_listening \"\$CONTROL_VNC_PORT\"" "$dockerfile"; then
+  printf '%s\n' 'a platform forwarding listener can still mask a dead control bridge' >&2
+  exit 1
+fi
 if grep -Fq -- "-bg >/dev/null" "$dockerfile"; then
   printf '%s\n' 'x11vnc still self-daemonizes before PID capture' >&2
   exit 1
