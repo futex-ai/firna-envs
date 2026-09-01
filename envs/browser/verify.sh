@@ -204,20 +204,6 @@ else:
     raise RuntimeError(f"unknown VNC probe mode: {mode}")
 PY
 
-loopback_listening() {
-  local hex_port
-  hex_port="$(printf '%04X' "$1")"
-  local addresses
-  addresses="$(awk -v suffix=":${hex_port}" \
-    '$2 ~ suffix"$" && $4 == "0A" { split($2, parts, ":"); print parts[1] }' \
-    /proc/net/tcp /proc/net/tcp6 2>/dev/null | sort -u)"
-  [[ -n "$addresses" ]]
-  while IFS= read -r address; do
-    [[ "$address" == '0100007F' \
-      || "$address" == '00000000000000000000000001000000' ]]
-  done <<<"$addresses"
-}
-
 assert_owned_process() {
   local label="$1"
   local pid_file="$2"
@@ -242,6 +228,34 @@ assert_owned_process() {
       return 1
     }
   done
+}
+
+owned_process_loopback_listening() {
+  local label="$1"
+  local pid_file="$2"
+  local port="$3"
+  local pid
+  IFS= read -r pid <"$pid_file"
+  local listeners
+  listeners="$(ss -H -ltnp "sport = :${port}" | \
+    awk -v marker="pid=${pid}," 'index($0, marker) { print }')"
+  [[ -n "$listeners" ]] || {
+    printf '%s process has no listener on port %s\n' "$label" "$port" >&2
+    return 1
+  }
+  local listener
+  while IFS= read -r listener; do
+    local local_address
+    read -r _ _ _ local_address _ <<<"$listener"
+    case "$local_address" in
+      "127.0.0.1:${port}"|"[::1]:${port}") ;;
+      *)
+        printf '%s process has a non-loopback listener: %s\n' \
+          "$label" "$local_address" >&2
+        return 1
+        ;;
+    esac
+  done <<<"$listeners"
 }
 
 assert_resize_ack() {
@@ -269,10 +283,6 @@ assert_owned_process display /tmp/firna-screen/xvnc.pid \
   Xtigervnc '-rfbport -1' '-rfbunixmode 0600'
 [[ -S /tmp/firna-screen/xvnc.sock ]]
 [[ "$(stat -c '%a' /tmp/firna-screen/xvnc.sock)" == '600' ]]
-loopback_listening 5900
-loopback_listening 5901
-loopback_listening 6080
-loopback_listening 6081
 assert_owned_process watch-vnc /tmp/firna-screen/x11vnc-watch.pid \
   x11vnc -viewonly firna-watch
 assert_owned_process control-vnc /tmp/firna-screen/x11vnc-control.pid \
@@ -281,6 +291,14 @@ assert_owned_process watch-bridge /tmp/firna-screen/websockify-watch.pid \
   websockify 6080 5900
 assert_owned_process control-bridge /tmp/firna-screen/websockify-control.pid \
   websockify 6081 5901
+owned_process_loopback_listening watch-vnc \
+  /tmp/firna-screen/x11vnc-watch.pid 5900
+owned_process_loopback_listening control-vnc \
+  /tmp/firna-screen/x11vnc-control.pid 5901
+owned_process_loopback_listening watch-bridge \
+  /tmp/firna-screen/websockify-watch.pid 6080
+owned_process_loopback_listening control-bridge \
+  /tmp/firna-screen/websockify-control.pid 6081
 printf '%s\n' 'OK browser-screen-stack-security'
 
 watch_pid="$(</tmp/firna-screen/x11vnc-watch.pid)"
