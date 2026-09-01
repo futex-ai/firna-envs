@@ -46,6 +46,9 @@ jobs:
       - name: Test build helper
         run: ./tests/build_template_test.sh
 
+      - name: Test browser resize contract
+        run: ./tests/browser_resize_contract_test.sh
+
       - name: Test release workflow
         run: ./tests/release_workflow_test.sh
 
