@@ -1,12 +1,12 @@
 # Browser environment inventory
 
-`firna-browser-v8` evolves the v5 native-Chrome environment without changing
-its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6 and
-v7 candidates were not adopted: v6 stopped at an opaque process-discovery
-assertion, while v7 diagnostics showed that E2B adds platform-owned forwarding
-listeners alongside the loopback-only Firna daemons. V8 validates sockets by
-their recorded owner PID so the platform forwarding layer is not mistaken for
-a Firna daemon binding publicly.
+`firna-browser-v9` evolves the v5 native-Chrome environment without changing
+its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6–v8
+candidates were not adopted. Their release diagnostics successively exposed
+ambiguous global process discovery, E2B platform-owned forwarding listeners,
+and x11vnc recording its pre-daemonization parent PID. V9 runs x11vnc under
+`nohup` without self-daemonizing, so every PID file identifies the live process
+that Firna launched.
 
 ## Display stack
 
@@ -18,7 +18,7 @@ a Firna daemon binding publicly.
   control targets. Both monitor RandR changes; only the watch target carries
   `-viewonly`.
 - Websockify retains ports 6080 and 6081 for Firna's authenticated outer
-  router. No new Firna-owned network listener is part of v8.
+  router. No new Firna-owned network listener is part of v9.
 
 ## Screen helper
 
