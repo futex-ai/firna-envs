@@ -157,41 +157,56 @@ def observe_resize(port: int, initial: tuple[int, int], target: tuple[int, int])
     if (width, height) != initial:
         raise RuntimeError(f"initial VNC framebuffer {(width, height)} != {initial}")
     sock.sendall(struct.pack("!BBHii", 2, 0, 2, -223, 0))
-    sock.sendall(struct.pack("!BBHHHH", 3, 1, 0, 0, width, height))
-    result = subprocess.run(
+    process = subprocess.Popen(
         ["firna-screen", "resize", str(target[0]), str(target[1])],
-        check=True,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=20,
     )
-    acknowledgment = json.loads(result.stdout)
-    if (acknowledgment.get("width"), acknowledgment.get("height")) != target:
-        raise RuntimeError(f"wrong resize acknowledgment: {acknowledgment!r}")
-    sock.sendall(struct.pack("!BBHHHH", 3, 1, 0, 0, target[0], target[1]))
-    deadline = time.monotonic() + 15
-    while time.monotonic() < deadline:
-        message_type = receive(sock, 1)[0]
-        if message_type == 0:
-            _, rectangle_count = struct.unpack("!BH", receive(sock, 3))
-            for _ in range(rectangle_count):
-                _, _, rect_width, rect_height, encoding = struct.unpack(
-                    "!HHHHi", receive(sock, 12)
-                )
-                if encoding == -223 and (rect_width, rect_height) == target:
-                    check(port, target)
-                    sock.close()
-                    return
-                if encoding == 0:
-                    receive(sock, rect_width * rect_height * bytes_per_pixel)
-        elif message_type == 2:
-            continue
-        elif message_type == 3:
-            receive(sock, 3)
-            receive(sock, struct.unpack("!I", receive(sock, 4))[0])
-        else:
-            raise RuntimeError(f"unexpected VNC message type: {message_type}")
-    raise RuntimeError(f"VNC resize notification not received for {target}")
+    resized = False
+    try:
+        sock.sendall(struct.pack("!BBHHHH", 3, 1, 0, 0, width, height))
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline and not resized:
+            message_type = receive(sock, 1)[0]
+            if message_type == 0:
+                _, rectangle_count = struct.unpack("!BH", receive(sock, 3))
+                for _ in range(rectangle_count):
+                    _, _, rect_width, rect_height, encoding = struct.unpack(
+                        "!HHHHi", receive(sock, 12)
+                    )
+                    if encoding == -223:
+                        width, height = rect_width, rect_height
+                        resized = (width, height) == target
+                    elif encoding == 0:
+                        receive(sock, rect_width * rect_height * bytes_per_pixel)
+                    else:
+                        raise RuntimeError(f"unexpected VNC encoding: {encoding}")
+                if not resized:
+                    sock.sendall(
+                        struct.pack("!BBHHHH", 3, 1, 0, 0, width, height)
+                    )
+            elif message_type == 2:
+                continue
+            elif message_type == 3:
+                receive(sock, 3)
+                receive(sock, struct.unpack("!I", receive(sock, 4))[0])
+            else:
+                raise RuntimeError(f"unexpected VNC message type: {message_type}")
+        if not resized:
+            raise RuntimeError(f"VNC resize notification not received for {target}")
+        stdout, stderr = process.communicate(timeout=20)
+        if process.returncode != 0:
+            raise RuntimeError(f"resize command failed: {stderr.strip()}")
+        acknowledgment = json.loads(stdout)
+        if (acknowledgment.get("width"), acknowledgment.get("height")) != target:
+            raise RuntimeError(f"wrong resize acknowledgment: {acknowledgment!r}")
+        check(port, target)
+    finally:
+        sock.close()
+        if process.poll() is None:
+            process.kill()
+            process.wait()
 
 
 mode = sys.argv[1]
