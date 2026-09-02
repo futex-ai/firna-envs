@@ -13,6 +13,7 @@ RUN apt-get update \
         fonts-noto-color-emoji \
         fuse3 \
         gnupg \
+        iproute2 \
         libasound2t64 \
         lsb-release \
         fluxbox \
@@ -41,10 +42,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CHROME_VERSION=152.0.7977.64-1
+ENV CHROME_URL=https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_152.0.7977.64-1_amd64.deb
 ENV CHROME_SHA256=4eae0736a812d9bc851cd2937f7af00e47dbaf8305845eed452703ff009873c7
 
 RUN curl --fail --silent --show-error --location --retry 5 \
-        https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+        "$CHROME_URL" \
         --output /tmp/chrome.deb \
     && printf '%s  %s\n' "$CHROME_SHA256" /tmp/chrome.deb > /tmp/chrome.sha256 \
     && sha256sum --check /tmp/chrome.sha256 \
@@ -69,6 +71,11 @@ RUN curl --fail --silent --show-error --location --retry 5 \
     && rm -rf /tmp/bowser /tmp/bowser.tar.gz /tmp/bowser.sha256
 
 ENV BOWSER_CHROME_PATH=/usr/bin/google-chrome-stable
+
+COPY contracts/browser-bowser.json /etc/firna/browser-bowser.json
+COPY scripts/verify_bowser_contract.py /usr/local/libexec/firna-verify-bowser-contract
+
+RUN chmod 0755 /usr/local/libexec/firna-verify-bowser-contract
 
 # hadolint ignore=SC2016
 RUN mkdir -p /etc/firna-screen \
@@ -170,9 +177,18 @@ RUN mkdir -p /etc/firna-screen \
         '' \
         'wait_for_vnc_geometry() {' \
         '    remote="$1"' \
-        '    target="$2"' \
+        '    pid_file="$2"' \
+        '    port="$3"' \
+        '    target="$4"' \
         '    waited=0' \
-        '    while [ "$(vnc_dimensions "$remote")" != "$target" ]; do' \
+        '    while :; do' \
+        '        if ! process_listening "$pid_file" "$port"; then' \
+        '            echo "firna-screen: VNC process stopped while applying requested geometry" >&2' \
+        '            exit 1' \
+        '        fi' \
+        '        if [ "$(vnc_dimensions "$remote")" = "$target" ]; then' \
+        '            return' \
+        '        fi' \
         '        if [ "$waited" -ge "$RESIZE_ATTEMPTS" ]; then' \
         '            echo "firna-screen: VNC did not apply requested geometry" >&2' \
         '            exit 1' \
@@ -182,12 +198,10 @@ RUN mkdir -p /etc/firna-screen \
         '    done' \
         '}' \
         '' \
-        'refresh_vnc_geometry() {' \
+        'wait_for_vnc_geometries() {' \
         '    target="$1"' \
-        '    DISPLAY="$DISPLAY_ID" X11VNC_REMOTE="$WATCH_VNC_REMOTE" x11vnc -R reset >/dev/null 2>&1' \
-        '    wait_for_vnc_geometry "$WATCH_VNC_REMOTE" "$target"' \
-        '    DISPLAY="$DISPLAY_ID" X11VNC_REMOTE="$CONTROL_VNC_REMOTE" x11vnc -R reset >/dev/null 2>&1' \
-        '    wait_for_vnc_geometry "$CONTROL_VNC_REMOTE" "$target"' \
+        '    wait_for_vnc_geometry "$WATCH_VNC_REMOTE" "$WATCH_VNC_PID_FILE" "$WATCH_VNC_PORT" "$target"' \
+        '    wait_for_vnc_geometry "$CONTROL_VNC_REMOTE" "$CONTROL_VNC_PID_FILE" "$CONTROL_VNC_PORT" "$target"' \
         '}' \
         '' \
         'ensure_locked() {' \
@@ -273,7 +287,7 @@ RUN mkdir -p /etc/firna-screen \
         '    ensure_locked' \
         '    target="${width}x${height}"' \
         '    if [ "$(display_dimensions)" = "$target" ]; then' \
-        '        refresh_vnc_geometry "$target"' \
+        '        wait_for_vnc_geometries "$target"' \
         '        printf '\''{"version":1,"width":%s,"height":%s}\n'\'' "$width" "$height"' \
         '        return' \
         '    fi' \
@@ -293,7 +307,7 @@ RUN mkdir -p /etc/firna-screen \
         '    DISPLAY="$DISPLAY_ID" xrandr --addmode "$DISPLAY_OUTPUT" "$mode"' \
         '    DISPLAY="$DISPLAY_ID" xrandr --output "$DISPLAY_OUTPUT" --mode "$mode"' \
         '    wait_for_geometry "$target"' \
-        '    refresh_vnc_geometry "$target"' \
+        '    wait_for_vnc_geometries "$target"' \
         '' \
         '    previous=""' \
         '    if [ -f "$MODE_STATE_FILE" ]; then' \

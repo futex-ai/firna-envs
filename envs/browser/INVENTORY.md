@@ -1,7 +1,15 @@
 # Browser environment inventory
 
-`firna-browser-v14` evolves the v5 native-Chrome environment without changing
-its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6–v13
+`firna-browser-v15` extends the v14 resizable native-Chrome environment without
+changing its Chrome, Bowser, gcsfuse, or public stream-port pins. V15 replaces
+Chrome's moving channel URL with its exact versioned package source, installs a
+machine-readable Bowser runtime contract, and exercises kiosk launch, history,
+and live inventory before release promotion. The release workflow publishes a
+unique staging alias and assigns the immutable final alias only after that exact
+template identity passes its smoke test.
+
+V14 evolved the v5 native-Chrome environment without changing its Chrome,
+Bowser, gcsfuse, or public stream-port pins. The published v6–v13
 candidates were not adopted. Their release diagnostics successively exposed
 ambiguous global process discovery, E2B platform-owned forwarding listeners,
 x11vnc recording its pre-daemonization parent PID, asynchronous RandR
@@ -28,7 +36,7 @@ forwarder cannot mask a dead bridge during idempotent ensure.
   control targets. Both monitor RandR changes; only the watch target carries
   `-viewonly`.
 - Websockify retains ports 6080 and 6081 for Firna's authenticated outer
-  router. No new Firna-owned network listener is part of v14.
+  router. No new Firna-owned network listener is part of v15.
 
 ## Screen helper
 
@@ -38,6 +46,16 @@ Its version-1 capability envelope advertises exact sizes between 320×240 and
 creates one exact RandR mode, waits for X to report the requested geometry,
 removes the preceding generated mode, and returns a machine-readable
 acknowledgment.
+
+The release smoke requires exact display, `screen`, and page-viewport geometry.
+Chrome's `outerWidth` and `outerHeight` may retain a browser-owned minimum at
+small display sizes, so they are required to contain the viewport but are not
+the viewport-size contract.
+
+Each x11vnc bridge consumes its native RandR notification. The screen helper
+checks the bridge's recorded PID and loopback listener while polling its
+reported framebuffer; it does not issue the remote reset command that can
+crash x11vnc during a resize.
 
 The helper records the display, VNC, and WebSocket bridge PIDs beneath its
 mode-0700 runtime directory. Verification reads those exact files and checks

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Build one immutable E2B template from a validated environment directory."""
+"""Build or reuse one E2B template and export its exact identity."""
 
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from http import HTTPStatus
 from pathlib import Path
@@ -12,80 +13,163 @@ from pathlib import Path
 from e2b import ApiClient, ConnectionConfig, Template, default_build_logger
 from e2b.api.client.api.templates import get_templates_aliases_alias
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+STAGING_TAG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+TRUSTED_IGNORE_PATTERNS = [
+    ".git",
+    ".context",
+    ".venv",
+    ".venv*",
+    "**/__pycache__",
+]
+
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    """Parse the environment directory, immutable name, and resources."""
+    """Parse immutable identity, resources, and release-mode controls."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-root", type=Path, default=REPO_ROOT)
     parser.add_argument("--environment-dir", type=Path, required=True)
     parser.add_argument("--template", required=True)
     parser.add_argument("--cpu", type=int, required=True)
     parser.add_argument("--memory-mb", type=int, required=True)
-    parser.add_argument(
-        "--skip-existing",
-        action="store_true",
-        help="leave an existing immutable template untouched",
-    )
+    parser.add_argument("--skip-existing", action="store_true")
+    parser.add_argument("--recover-existing", action="store_true")
+    parser.add_argument("--stage-tag")
+    parser.add_argument("--result-file", type=Path)
     return parser.parse_args(argv)
 
 
-def template_exists(template_name: str) -> bool:
-    """Return whether the selected E2B team already owns the template name."""
-    client = ApiClient(ConnectionConfig())
+def resolve_template_id(
+    template_name: str,
+    client: ApiClient | None = None,
+) -> str | None:
+    """Resolve one alias to its exact E2B template id, or report absence."""
+    active_client = client if client is not None else ApiClient(ConnectionConfig())
     response = get_templates_aliases_alias.sync_detailed(
         template_name,
-        client=client,
+        client=active_client,
     )
-    if response.status_code == HTTPStatus.OK:
-        return True
     if response.status_code == HTTPStatus.NOT_FOUND:
-        return False
-    raise RuntimeError(
-        f"unexpected E2B response while checking template: {response.status_code}"
-    )
+        return None
+    if response.status_code != HTTPStatus.OK:
+        raise RuntimeError(
+            f"unexpected E2B response while resolving template: {response.status_code}"
+        )
+    template_id = getattr(response.parsed, "template_id", None)
+    if not isinstance(template_id, str) or not template_id:
+        raise RuntimeError("successful E2B alias response contained no template id")
+    return template_id
 
 
 def build_template(
+    source_root: Path,
     environment_dir: Path,
     template_name: str,
     cpu: int,
     memory_mb: int,
-) -> None:
-    """Build a Dockerfile into the selected E2B team under one immutable name."""
-    dockerfile = environment_dir / "Dockerfile"
-    definition = Template(file_context_path=environment_dir).from_dockerfile(
-        str(dockerfile)
-    )
-    Template.build(
+) -> str:
+    """Build from one contained source context and return its template id."""
+    source_root, dockerfile = resolve_build_source(source_root, environment_dir)
+    definition = Template(
+        file_context_path=source_root,
+        file_ignore_patterns=TRUSTED_IGNORE_PATTERNS,
+    ).from_dockerfile(str(dockerfile))
+    build = Template.build(
         definition,
         template_name,
         cpu_count=cpu,
         memory_mb=memory_mb,
         on_build_logs=default_build_logger(),
     )
+    template_id = getattr(build, "template_id", None)
+    if not isinstance(template_id, str) or not template_id:
+        raise RuntimeError("successful E2B build returned no template id")
+    return template_id
+
+
+def resolve_build_source(source_root: Path, environment_dir: Path) -> tuple[Path, Path]:
+    """Resolve a Dockerfile while preventing source-context path escape."""
+    resolved_root = source_root.resolve(strict=True)
+    if not resolved_root.is_dir():
+        raise ValueError("source root must be a directory")
+    dockerfile = (resolved_root / environment_dir / "Dockerfile").resolve(strict=True)
+    if not dockerfile.is_relative_to(resolved_root):
+        raise ValueError("environment Dockerfile must be inside source root")
+    return resolved_root, dockerfile
+
+
+def write_result(
+    path: Path | None,
+    template_ref: str,
+    template_id: str,
+    needs_promotion: bool,
+) -> None:
+    """Append shell-safe release metadata for the workflow consumer."""
+    if path is None:
+        return
+    with path.open("a", encoding="utf-8") as result:
+        result.write(f"template_ref={template_ref}\n")
+        result.write(f"template_id={template_id}\n")
+        result.write(f"needs_promotion={str(needs_promotion).lower()}\n")
+
+
+def validate_release_args(args: argparse.Namespace) -> None:
+    """Reject recovery or staging combinations that cannot be made safe."""
+    if args.stage_tag and not STAGING_TAG_PATTERN.fullmatch(args.stage_tag):
+        raise ValueError("staging tag must use letters, numbers, dots, underscores, or hyphens")
+    if args.recover_existing and (not args.skip_existing or not args.stage_tag):
+        raise ValueError("recovery requires --skip-existing and --stage-tag")
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Validate immutability and build the requested template."""
+    """Build a staging alias or reuse an identity that will still be smoked."""
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    try:
+        validate_release_args(args)
+        source_root, _ = resolve_build_source(args.source_root, args.environment_dir)
+    except (OSError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 64
     if not os.environ.get("E2B_API_KEY"):
         print("error: E2B_API_KEY must select the intended Firna team", file=sys.stderr)
         return 78
-    if template_exists(args.template):
-        if args.skip_existing:
-            print(f"template {args.template} already exists; leaving it unchanged")
-            return 0
+
+    final_id = resolve_template_id(args.template)
+    if args.recover_existing and final_id is None:
         print(
-            f"error: template {args.template} already exists; "
-            "increment the manifest version",
+            f"error: template {args.template} does not exist; recovery cannot create it",
             file=sys.stderr,
         )
         return 73
-    build_template(
-        args.environment_dir,
-        args.template,
-        args.cpu,
-        args.memory_mb,
-    )
+    if final_id and not args.recover_existing:
+        if not args.skip_existing:
+            print(
+                f"error: template {args.template} already exists; "
+                "increment the manifest version",
+                file=sys.stderr,
+            )
+            return 73
+        print(f"template {args.template} resolves to {final_id}; reusing for smoke")
+        write_result(args.result_file, args.template, final_id, False)
+        return 0
+
+    template_ref = args.template
+    needs_promotion = False
+    if args.stage_tag:
+        template_ref = f"{args.template}:{args.stage_tag}"
+        needs_promotion = True
+    template_id = resolve_template_id(template_ref)
+    if template_id is None:
+        template_id = build_template(
+            source_root,
+            args.environment_dir,
+            template_ref,
+            args.cpu,
+            args.memory_mb,
+        )
+    else:
+        print(f"staging template {template_ref} resolves to {template_id}; reusing for smoke")
+    write_result(args.result_file, template_ref, template_id, needs_promotion)
     return 0
 
 

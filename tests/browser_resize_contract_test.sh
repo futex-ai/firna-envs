@@ -15,7 +15,8 @@ if grep -Fq -- '-screen 0 1280x800x24' "$dockerfile"; then
   exit 1
 fi
 
-grep -Fxq 'version: 14' "$manifest"
+grep -Fxq 'version: 15' "$manifest"
+grep -Fq "        iproute2 \\" "$dockerfile"
 grep -Fq 'tigervnc-standalone-server' "$dockerfile"
 grep -Fq 'capabilities)' "$dockerfile"
 grep -Fq 'resize)' "$dockerfile"
@@ -25,6 +26,16 @@ grep -Eq 'CONTROL_VNC_PID_FILE=.*x11vnc-control[.]pid' "$dockerfile"
 grep -Fq 'WATCH_VNC_REMOTE="X11VNC_REMOTE_FIRNA_WATCH"' "$dockerfile"
 grep -Fq 'CONTROL_VNC_REMOTE="X11VNC_REMOTE_FIRNA_CONTROL"' "$dockerfile"
 grep -Fq 'wait_for_vnc_geometry' "$dockerfile"
+grep -Fq \
+  "wait_for_vnc_geometry \"\$WATCH_VNC_REMOTE\" \"\$WATCH_VNC_PID_FILE\" \"\$WATCH_VNC_PORT\" \"\$target\"" \
+  "$dockerfile"
+grep -Fq \
+  "wait_for_vnc_geometry \"\$CONTROL_VNC_REMOTE\" \"\$CONTROL_VNC_PID_FILE\" \"\$CONTROL_VNC_PORT\" \"\$target\"" \
+  "$dockerfile"
+if grep -Fq 'x11vnc -R reset' "$dockerfile"; then
+  printf '%s\n' 'resize still uses the crash-prone x11vnc remote reset' >&2
+  exit 1
+fi
 [[ "$(grep -Fc -- '-xrandr resize' "$dockerfile")" == '2' ]]
 [[ "$(grep -Fc 'nohup x11vnc' "$dockerfile")" == '2' ]]
 if [[ "$(grep -Fc -- '-noshm' "$dockerfile")" != '2' ]]; then
@@ -121,6 +132,10 @@ grep -Fq 'subprocess.Popen' "$verify_script"
 grep -Fq 'assert_owned_process' "$verify_script"
 grep -Fq 'owned_process_loopback_listening' "$verify_script"
 grep -Fq 'browser screen-stack diagnostics' "$verify_script"
+if grep -Fq 'subprocess.run(' "$verify_script"; then
+  printf '%s\n' 'VNC resize probe blocks while the framebuffer is unread' >&2
+  exit 1
+fi
 if grep -Fq '"outer_width": str(width)' "$verify_script"; then
   printf '%s\n' 'browser smoke still requires Chrome window chrome to match the content viewport' >&2
   exit 1
