@@ -77,13 +77,17 @@ class BuildTemplateTests(unittest.TestCase):
             template.return_value = template_instance
             template.build.return_value = build_info
             result = build_template.build_template(
+                build_template.REPO_ROOT,
                 Path("envs/general"),
                 "firna-general-v3:stage-1",
                 2,
                 2048,
             )
 
-        template.assert_called_once_with(file_context_path=build_template.REPO_ROOT)
+        template.assert_called_once_with(
+            file_context_path=build_template.REPO_ROOT,
+            file_ignore_patterns=build_template.TRUSTED_IGNORE_PATTERNS,
+        )
         template_instance.from_dockerfile.assert_called_once_with(
             str(build_template.REPO_ROOT / "envs/general/Dockerfile")
         )
@@ -95,6 +99,23 @@ class BuildTemplateTests(unittest.TestCase):
             on_build_logs=logger.return_value,
         )
         self.assertEqual(result, "tmpl_built")
+
+    def test_build_rejects_an_environment_outside_the_source_root(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            source_root = Path(temporary_directory) / "source"
+            outside = Path(temporary_directory) / "outside"
+            source_root.mkdir()
+            outside.mkdir()
+            (outside / "Dockerfile").touch()
+
+            with self.assertRaisesRegex(ValueError, "inside source root"):
+                build_template.build_template(
+                    source_root,
+                    Path("../outside"),
+                    "firna-general-v3:stage-1",
+                    2,
+                    2048,
+                )
 
     @patch("build_template.resolve_template_id", return_value="tmpl_existing")
     def test_release_reuses_existing_alias_but_exports_its_identity(self, resolve: Mock) -> None:
@@ -148,6 +169,7 @@ class BuildTemplateTests(unittest.TestCase):
 
             self.assertEqual(result, 0)
             build.assert_called_once_with(
+                build_template.REPO_ROOT,
                 Path("envs/general"),
                 "firna-general-v3:stage-run-1",
                 2,
@@ -183,6 +205,7 @@ class BuildTemplateTests(unittest.TestCase):
 
             self.assertEqual(result, 0)
             build.assert_called_once_with(
+                build_template.REPO_ROOT,
                 Path("envs/general"),
                 "firna-general-v3:stage-run-1",
                 2,
@@ -194,6 +217,22 @@ class BuildTemplateTests(unittest.TestCase):
                 "template_id=tmpl_staged\n"
                 "needs_promotion=true\n",
             )
+
+    @patch("build_template.resolve_template_id", return_value=None)
+    def test_recovery_requires_an_existing_final_alias(self, resolve: Mock) -> None:
+        with (
+            patch.dict(os.environ, {"E2B_API_KEY": "test-key"}, clear=True),
+            patch("build_template.build_template", return_value="tmpl_staged") as build,
+            redirect_stderr(StringIO()),
+        ):
+            result = build_template.main(
+                self.base_args()
+                + ["--skip-existing", "--recover-existing", "--stage-tag", "stage-run-1"]
+            )
+
+        self.assertEqual(result, 73)
+        resolve.assert_called_once_with("firna-general-v3")
+        build.assert_not_called()
 
     @staticmethod
     def base_args() -> list[str]:

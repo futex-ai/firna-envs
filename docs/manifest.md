@@ -131,3 +131,7 @@ allowed. `verify.sh` must be executable, use Bash strict mode, and exercise all
 tooling promised by the environment.
 
 Run `./scripts/validate_manifests.sh` after every change.
+
+Historical immutable tags are validated through the compatibility boundary
+defined by the [release contract](./release.md); that mode does not relax the
+schema for new manifests or ordinary publications.

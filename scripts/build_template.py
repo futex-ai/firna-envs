@@ -15,11 +15,19 @@ from e2b.api.client.api.templates import get_templates_aliases_alias
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 STAGING_TAG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+TRUSTED_IGNORE_PATTERNS = [
+    ".git",
+    ".context",
+    ".venv",
+    ".venv*",
+    "**/__pycache__",
+]
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse immutable identity, resources, and release-mode controls."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-root", type=Path, default=REPO_ROOT)
     parser.add_argument("--environment-dir", type=Path, required=True)
     parser.add_argument("--template", required=True)
     parser.add_argument("--cpu", type=int, required=True)
@@ -54,14 +62,18 @@ def resolve_template_id(
 
 
 def build_template(
+    source_root: Path,
     environment_dir: Path,
     template_name: str,
     cpu: int,
     memory_mb: int,
 ) -> str:
-    """Build from repository context and return the resulting template id."""
-    dockerfile = (REPO_ROOT / environment_dir / "Dockerfile").resolve()
-    definition = Template(file_context_path=REPO_ROOT).from_dockerfile(str(dockerfile))
+    """Build from one contained source context and return its template id."""
+    source_root, dockerfile = resolve_build_source(source_root, environment_dir)
+    definition = Template(
+        file_context_path=source_root,
+        file_ignore_patterns=TRUSTED_IGNORE_PATTERNS,
+    ).from_dockerfile(str(dockerfile))
     build = Template.build(
         definition,
         template_name,
@@ -73,6 +85,17 @@ def build_template(
     if not isinstance(template_id, str) or not template_id:
         raise RuntimeError("successful E2B build returned no template id")
     return template_id
+
+
+def resolve_build_source(source_root: Path, environment_dir: Path) -> tuple[Path, Path]:
+    """Resolve a Dockerfile while preventing source-context path escape."""
+    resolved_root = source_root.resolve(strict=True)
+    if not resolved_root.is_dir():
+        raise ValueError("source root must be a directory")
+    dockerfile = (resolved_root / environment_dir / "Dockerfile").resolve(strict=True)
+    if not dockerfile.is_relative_to(resolved_root):
+        raise ValueError("environment Dockerfile must be inside source root")
+    return resolved_root, dockerfile
 
 
 def write_result(
@@ -103,7 +126,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
         validate_release_args(args)
-    except ValueError as error:
+        source_root, _ = resolve_build_source(args.source_root, args.environment_dir)
+    except (OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 64
     if not os.environ.get("E2B_API_KEY"):
@@ -111,6 +135,12 @@ def main(argv: list[str] | None = None) -> int:
         return 78
 
     final_id = resolve_template_id(args.template)
+    if args.recover_existing and final_id is None:
+        print(
+            f"error: template {args.template} does not exist; recovery cannot create it",
+            file=sys.stderr,
+        )
+        return 73
     if final_id and not args.recover_existing:
         if not args.skip_existing:
             print(
@@ -131,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     template_id = resolve_template_id(template_ref)
     if template_id is None:
         template_id = build_template(
+            source_root,
             args.environment_dir,
             template_ref,
             args.cpu,

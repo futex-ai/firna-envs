@@ -19,9 +19,11 @@ Each environment lives under `envs/<name>/` and contains:
 - `INVENTORY.md` — optional provenance notes for environments reconstructed
   from an earlier template.
 
-Shared validation, build, and sandbox helpers live in `scripts/`. The manifest
-contract is documented in [docs/manifest.md](./docs/manifest.md), and active
-implementation work is indexed in [plans/README.md](./plans/README.md).
+Shared validation, build, and sandbox helpers live in `scripts/`. The
+[manifest contract](./docs/manifest.md) and
+[release contract](./docs/release.md) define the source and publication
+boundaries, and active implementation work is indexed in
+[plans/README.md](./plans/README.md).
 
 ## Environment definitions
 
@@ -57,12 +59,14 @@ An environment named `<env>` at manifest version `<N>` is published as the
 immutable E2B template `firna-<env>-v<N>`. The matching Git tag is
 `<env>-v<N>`.
 
-The tag, manifest, Dockerfile, and GitHub Actions release run form one
-provenance chain. Normal releases never reassign a published final alias;
-change the manifest version and publish a new tag instead. The workflow's
-explicit recovery control is reserved for a final alias whose own release
-smoke failed, and only reassigns it to a separately built and smoke-tested
-template id.
+The tag, manifest, Dockerfile, release-tooling commit, and GitHub Actions run
+form one provenance chain. The workflow keeps trusted current tooling separate
+from the requested tag's immutable source tree, so checking out an older tag
+cannot replace the validator, builder, sandbox runner, or promoter. Normal
+releases never reassign a published final alias; change the manifest version
+and publish a new tag instead. The workflow's explicit recovery control is
+reserved for a final alias whose own release smoke failed, and only reassigns
+it to a separately built and smoke-tested template id.
 
 ## Validate and build locally
 
@@ -127,14 +131,31 @@ replacement is visible. The production and preview matrix runs one account at
 a time so an in-progress template publication cannot be mistaken for a ready
 immutable release.
 
-If an existing final alias fails its release smoke, manually dispatch the same
-tag with `recover_existing` enabled. That explicit recovery builds and smokes a
-fresh staging identity before reassigning the final alias; leave the control
-disabled for ordinary retries. Manual dispatch validates the requested tag
-before checkout, checks out that exact tag, and verifies the checked-out commit
-before reading its manifest or building. Releases for the same tag are
-serialized, so a recovery cannot overlap another publication of that immutable
-source.
+If an existing final alias fails its release smoke, manually dispatch a
+hardened release workflow with `recover_existing` enabled and provide the
+failed alias's source tag as the `tag` input. The workflow run ref selects the
+workflow definition, while the input independently selects immutable build
+source. Because the `release` environment currently permits only version-tag
+run refs, use a published tag containing the isolated-source workflow; the
+first compatible tooling tag is `browser-v15`. For example:
+
+```bash
+gh workflow run release.yml --ref browser-v15 \
+  -f tag=general-v3 -f recover_existing=true
+```
+
+The tooling checkout comes from the current `main`, while the requested tag is
+checked out beneath a separate source root and verified
+against its exact commit. Explicit recovery may use the compatibility rules
+needed by historical manifests, but it still validates their original pins and
+may proceed only when the final alias already exists. It then builds and smokes
+a fresh staging identity before reassigning that alias. Leave recovery disabled
+for ordinary releases, which retain the current strict manifest contract.
+Releases for the same requested tag are serialized.
+
+Recovery cannot recreate an upstream artifact that the historical Dockerfile
+references but its publisher no longer serves. In that case, publish a new
+manifest version with a durable source rather than changing the historical tag.
 
 To audit a deployed template, start with its template name, remove the `firna-`
 prefix to find the Git tag, and inspect that tag's manifest and Dockerfile. The

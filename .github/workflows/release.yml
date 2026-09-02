@@ -24,6 +24,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  EXPECTED_PUSH_COMMIT: ${{ github.event_name == 'push' && github.sha || '' }}
+  SOURCE_ROOT: ${{ github.workspace }}/release-source
   YQ_VERSION: v4.53.3
 
 jobs:
@@ -55,10 +57,17 @@ jobs:
             echo "recover_existing=$RECOVER_EXISTING_INPUT"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Check out requested tag
+      - name: Check out trusted release tooling
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'refs/heads/main' || github.sha }}
+
+      - name: Check out requested source tag
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          path: release-source
           ref: refs/tags/${{ steps.release.outputs.tag }}
 
       - name: Install yq
@@ -73,15 +82,20 @@ jobs:
           REQUESTED_TAG: ${{ steps.release.outputs.tag }}
           RECOVER_EXISTING_INPUT: ${{ steps.release.outputs.recover_existing }}
         run: |
-          tag_commit="$(git rev-parse "refs/tags/${REQUESTED_TAG}^{commit}")"
-          head_commit="$(git rev-parse HEAD)"
+          tooling_commit="$(git rev-parse HEAD)"
+          tag_commit="$(git -C "$SOURCE_ROOT" rev-parse "refs/tags/${REQUESTED_TAG}^{commit}")"
+          head_commit="$(git -C "$SOURCE_ROOT" rev-parse HEAD)"
           if [[ "$head_commit" != "$tag_commit" ]]; then
             echo "checked-out commit $head_commit does not match tag $REQUESTED_TAG at $tag_commit" >&2
             exit 1
           fi
+          if [[ -n "$EXPECTED_PUSH_COMMIT" && "$head_commit" != "$EXPECTED_PUSH_COMMIT" ]]; then
+            echo "checked-out tag moved from pushed commit $EXPECTED_PUSH_COMMIT to $head_commit" >&2
+            exit 1
+          fi
           env_name="${REQUESTED_TAG%-v*}"
           version="${REQUESTED_TAG##*-v}"
-          manifest="envs/${env_name}/manifest.yaml"
+          manifest="${SOURCE_ROOT}/envs/${env_name}/manifest.yaml"
           if [[ ! -f "$manifest" ]]; then
             echo "environment manifest not found: $manifest" >&2
             exit 1
@@ -97,6 +111,8 @@ jobs:
             echo "TEMPLATE=firna-${REQUESTED_TAG}"
             echo "RECOVER_EXISTING=$RECOVER_EXISTING_INPUT"
           } >> "$GITHUB_ENV"
+          echo "release tooling commit: $tooling_commit"
+          echo "release source commit: $head_commit"
 
       - name: Install E2B SDK
         run: python3 -m pip install --requirement requirements.txt
@@ -107,15 +123,17 @@ jobs:
           E2B_API_KEY: ${{ matrix.account == 'prod' && secrets.E2B_API_KEY_PROD || secrets.E2B_API_KEY_PREVIEW }}
         run: |
           stage_tag="stage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.account }}"
+          source_options=(--source-root "$SOURCE_ROOT")
           build_options=(
             --skip-existing
             --stage-tag "$stage_tag"
             --result-file "$GITHUB_OUTPUT"
           )
           if [[ "$RECOVER_EXISTING" == 'true' ]]; then
+            source_options+=(--allow-legacy-manifest)
             build_options+=(--recover-existing)
           fi
-          ./scripts/build_template.sh "$ENV_NAME" "${build_options[@]}"
+          ./scripts/build_template.sh "${source_options[@]}" "$ENV_NAME" "${build_options[@]}"
 
       - name: Smoke-test staged or published template
         env:
@@ -123,7 +141,7 @@ jobs:
         run: >-
           python3 scripts/run_in_sandbox.py
           "${{ steps.template.outputs.template_ref }}"
-          "envs/${ENV_NAME}/verify.sh"
+          "${SOURCE_ROOT}/envs/${ENV_NAME}/verify.sh"
 
       - name: Promote smoke-tested template
         if: steps.template.outputs.needs_promotion == 'true'
