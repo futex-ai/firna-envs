@@ -54,8 +54,8 @@ RUN curl --fail --silent --show-error --location --retry 5 \
     && rm -f /tmp/chrome.deb /tmp/chrome.sha256 \
     && rm -rf /var/lib/apt/lists/*
 
-ENV BOWSER_VERSION=0.3.0
-ENV BOWSER_SHA256=3237484c0edfb3b230f264b43fa7b034a221cb2bd1c03f07e6e40e278d513070
+ENV BOWSER_VERSION=0.4.0
+ENV BOWSER_SHA256=35199bdc2c802df5a02fdd38c9e0675a1b58c7d65afe52292ca0f2101e96f531
 
 RUN curl --fail --silent --show-error --location --retry 5 \
         "https://github.com/futex-ai/bowser/releases/download/v${BOWSER_VERSION}/bowser-${BOWSER_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \

@@ -15,7 +15,7 @@ if grep -Fq -- '-screen 0 1280x800x24' "$dockerfile"; then
   exit 1
 fi
 
-grep -Fxq 'version: 14' "$manifest"
+grep -Fxq 'version: 15' "$manifest"
 grep -Fq 'tigervnc-standalone-server' "$dockerfile"
 grep -Fq 'capabilities)' "$dockerfile"
 grep -Fq 'resize)' "$dockerfile"
