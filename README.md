@@ -28,14 +28,18 @@ implementation work is indexed in [plans/README.md](./plans/README.md).
 | Environment | Template | Purpose |
 | --- | --- | --- |
 | `general` | `firna-general-v3` | Debian-based command-line and build tools for everyday repository work |
-| `browser` | `firna-browser-v14` | Google Chrome, a dynamically resizable screen stack, and the checksum-pinned Bowser CLI for browser automation |
+| `browser` | `firna-browser-v15` | Google Chrome, a dynamically resizable screen stack, and the checksum-pinned Bowser CLI for browser automation |
 
 The browser definition pins both the Chrome amd64 Debian package and the
 Bowser x86_64 Linux release archive by version and SHA-256. Its release smoke
-also requires Bowser's kiosk-launch, history, and live-inventory capabilities
+also requires Bowser's kiosk-launch, history, live-inventory, and page-favicon capabilities
 before the template can be consumed by Firna's native browser chrome. Every
 environment also pins gcsfuse and the Google repository key checksum so Firna
 can mount the owning agent tree's durable drive at runtime.
+
+The release smoke loads a locally declared website icon through Bowser's
+opt-in live inventory and checks its bounded 32×32 PNG response. Ordinary
+session inventory must remain icon-free.
 
 The browser screen helper exposes `ensure`, versioned `capabilities`, and
 bounded `resize <width> <height>` commands. Version 1 applies exact CSS-pixel

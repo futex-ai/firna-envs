@@ -22,7 +22,7 @@ Browser environments also pin the bundled Bowser release:
 
 ```yaml
 name: browser
-version: 14
+version: 15
 description: Browser automation base environment with a dynamically resizable screen stack and durable-drive mount support
 resources:
   cpu: 2
@@ -34,7 +34,7 @@ chrome:
   version: 152.0.7977.64-1
   sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 bowser:
-  version: 0.3.0
+  version: 0.4.0
   sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 
@@ -89,6 +89,10 @@ Optional mapping for environments that bundle the Bowser CLI.
 
 Both values must match the `BOWSER_VERSION` and `BOWSER_SHA256` pins in the
 environment Dockerfile. The archive is verified before installation.
+The browser release smoke requires `page_favicons` alongside kiosk launch,
+history, and live inventory. It loads a relative declared PNG in the real
+browser, checks the canonical bounded 32×32 response from opted-in inventory,
+and verifies ordinary inventory does not expose image fields.
 
 ### `chrome`
 

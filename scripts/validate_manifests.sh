@@ -147,7 +147,7 @@ for dir in "$envs_root"/*/; do
       if ! grep -Fq 'bowser --json-envelope capabilities' "$verify_script"; then
         report_error "${verify_script#"${repo_root}/"} must verify Bowser capabilities"
       fi
-      for required_feature in history kiosk_launch live_inventory; do
+      for required_feature in history kiosk_launch live_inventory page_favicons; do
         if ! grep -Fq "\"${required_feature}\"" "$verify_script"; then
           report_error "${verify_script#"${repo_root}/"} must verify Bowser feature ${required_feature}"
         fi

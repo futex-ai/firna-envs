@@ -1,5 +1,16 @@
 # Browser environment inventory
 
+`firna-browser-v15` packages Bowser 0.4.0 from the verified release revision
+`1e663325dd41de0363f6b80e2c07476ee7b902d0`. Its Linux amd64 archive SHA-256 is
+`35199bdc2c802df5a02fdd38c9e0675a1b58c7d65afe52292ca0f2101e96f531`.
+The [Bowser release](https://github.com/futex-ai/bowser/releases/tag/v0.4.0)
+adds transient page favicons acquired inside the current browser context.
+Release verification requires its capability, a real declared icon normalized
+to a bounded 32×32 PNG, and icon-free ordinary inventory. The v14 display and
+viewport contract below remains the foundation of this environment.
+
+## Earlier display releases
+
 `firna-browser-v14` evolves the v5 native-Chrome environment without changing
 its Chrome, Bowser, gcsfuse, or public stream-port pins. The published v6–v13
 candidates were not adopted. Their release diagnostics successively exposed

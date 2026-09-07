@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly expected_bowser_version='0.3.0'
+readonly expected_bowser_version='0.4.0'
 readonly expected_chrome_version='152.0.7977.64'
 readonly expected_gcsfuse_version='3.11.2'
 
@@ -26,7 +26,7 @@ assert isinstance(result, dict)
 assert result.get("version") == expected_version
 features = result.get("features")
 assert isinstance(features, dict)
-for required in ("history", "kiosk_launch", "live_inventory"):
+for required in ("history", "kiosk_launch", "live_inventory", "page_favicons"):
     assert features.get(required) is True
 PY
 
@@ -366,6 +366,8 @@ printf '%s\n' 'OK browser-vnc-framebuffer'
 
 cat >"${site_root}/server.py" <<'PY'
 import json
+import struct
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -373,6 +375,7 @@ state = {}
 page = b'''<!doctype html>
 <meta charset="utf-8">
 <title>viewport-smoke</title>
+<link rel="icon" type="image/png" href="icons/site.png">
 <style>
 html, body { margin: 0; min-height: 100%; }
 body { background: #eef8f3; font: 20px sans-serif; }
@@ -401,12 +404,28 @@ report();
 </script>'''
 
 
+def png_chunk(kind, payload):
+    checksum = zlib.crc32(kind + payload)
+    return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+
+icon = (
+    b"\x89PNG\r\n\x1a\n"
+    + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 32, 32, 8, 6, 0, 0, 0))
+    + png_chunk(b"IDAT", zlib.compress((b"\0" + bytes((28, 132, 80, 255)) * 32) * 32))
+    + png_chunk(b"IEND", b"")
+)
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/":
             body = page
             content_type = "text/html; charset=utf-8"
+        elif parsed.path == "/icons/site.png":
+            body = icon
+            content_type = "image/png"
         elif parsed.path == "/report":
             state.update({key: values[-1] for key, values in parse_qs(parsed.query).items()})
             body = b"ok"
@@ -457,6 +476,49 @@ assert isinstance(session, str) and session.startswith("bsr_")
 print(session)
 PY
 )"
+
+favicon_file="${site_root}/favicon-envelope.json"
+DISPLAY=:0 bowser --json-envelope --headed --no-ai \
+  --chrome-path /usr/bin/google-chrome-stable \
+  --session-dir "${site_root}/session" --chrome-args=--kiosk \
+  session info "$browser_session_id" --include-favicons >"$favicon_file"
+python3 - "$favicon_file" <<'PY'
+import base64
+import json
+import struct
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    payload = json.load(source)
+assert payload.get("ok") is True
+pages = payload["result"]["session"]["pages"]
+assert len(pages) == 1
+assert pages[0]["selected"] is True
+assert pages[0]["title"] == "viewport-smoke"
+assert pages[0]["url"] == "http://127.0.0.1:8377/"
+encoded = pages[0]["favicon"]["png_base64"]
+assert isinstance(encoded, str) and len(encoded) <= 6 * 1024
+image = base64.b64decode(encoded, validate=True)
+assert base64.b64encode(image).decode("ascii") == encoded
+assert image[:8] == b"\x89PNG\r\n\x1a\n"
+assert image[12:16] == b"IHDR"
+assert struct.unpack(">II", image[16:24]) == (32, 32)
+PY
+DISPLAY=:0 bowser --json-envelope --headed --no-ai \
+  --chrome-path /usr/bin/google-chrome-stable \
+  --session-dir "${site_root}/session" --chrome-args=--kiosk \
+  session info "$browser_session_id" >"${site_root}/ordinary-inventory.json"
+python3 - "${site_root}/ordinary-inventory.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    payload = json.load(source)
+assert payload.get("ok") is True
+for page in payload["result"]["session"]["pages"]:
+    assert "favicon" not in page and "png_base64" not in page
+PY
+printf '%s\n' 'OK browser-tab-favicon'
 
 wait_for_browser_metrics() {
   python3 - "$1" "$2" <<'PY'

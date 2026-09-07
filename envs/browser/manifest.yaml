@@ -1,5 +1,5 @@
 name: browser
-version: 14
+version: 15
 description: Browser automation base environment with Chrome, Bowser, a dynamically resizable screen stack, and durable-drive mount support
 resources:
   cpu: 2
@@ -11,5 +11,5 @@ chrome:
   version: 152.0.7977.64-1
   sha256: 4eae0736a812d9bc851cd2937f7af00e47dbaf8305845eed452703ff009873c7
 bowser:
-  version: 0.3.0
-  sha256: 3237484c0edfb3b230f264b43fa7b034a221cb2bd1c03f07e6e40e278d513070
+  version: 0.4.0
+  sha256: 35199bdc2c802df5a02fdd38c9e0675a1b58c7d65afe52292ca0f2101e96f531
