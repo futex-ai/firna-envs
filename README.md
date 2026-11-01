@@ -20,8 +20,7 @@ Each environment lives under `envs/<name>/` and contains:
   from an earlier template.
 
 Shared validation, build, and sandbox helpers live in `scripts/`. The manifest
-contract is documented in [docs/manifest.md](./docs/manifest.md), and active
-implementation work is indexed in [plans/README.md](./plans/README.md).
+contract is documented in [docs/manifest.md](./docs/manifest.md).
 
 ## Environment definitions
 
